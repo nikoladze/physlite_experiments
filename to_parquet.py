@@ -1,8 +1,10 @@
-import uproot4
 import awkward1 as ak
 
-def to_ak(root_filename, zip=False):
+def to_ak_uproot4(root_filename, zip=False):
     "Convert easily readable AuxDyn Branches"
+
+    import uproot4
+
     with uproot4.open(root_filename) as f:
         read_branches = []
         t = f["CollectionTree"]
@@ -48,3 +50,46 @@ def to_ak(root_filename, zip=False):
             return ar
         else:
             return t.arrays(read_branches)
+
+
+def to_ak(root_filename):
+
+    import uproot
+
+    with uproot.open(root_filename) as f:
+        read_branches = []
+        t = f["CollectionTree"]
+        for k in t.keys():
+            k = k.decode()
+            if not "AuxDyn" in k:
+                continue
+            # skip <vector<vector<...>> of custom types
+            if "Links" in k:
+                continue
+            if "TrigMatchedObjects" in k:
+                continue
+            if "GhostTrack" in k:
+                continue
+            # only read m_persIndex, m_persKey for Link
+            if "Link" in k and not "m_" in k:
+                continue
+            if "/" in k:
+                k = k.split("/")[1]
+            # these vector<vector<...>> are readable but slow ...
+            if k in [
+                'AnalysisJetsAuxDyn.NumTrkPt500',
+                'AnalysisJetsAuxDyn.SumPtTrkPt500',
+                'AnalysisJetsAuxDyn.NumTrkPt1000',
+                'AnalysisJetsAuxDyn.TrackWidthPt1000',
+                'CaloCalTopoClustersAuxDyn.e_sampl',
+                'EventInfoAuxDyn.streamTagRobs',
+                'EventInfoAuxDyn.streamTagDets',
+            ]:
+                continue
+            # will be 'O' with uproot3
+            if any([s in k for s in ["definingParametersCovMatrix", "MET_Core", "e_sampl", "eta_sampl"]]):
+                continue
+            read_branches.append(k)
+        ar_dict = t.arrays(read_branches)
+        ar = ak.zip({k : ak.from_awkward0(v) for k, v in ar_dict.items()}, depth_limit=1)
+    return ar
