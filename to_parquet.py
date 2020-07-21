@@ -93,3 +93,17 @@ def to_ak(root_filename):
         ar_dict = t.arrays(read_branches)
         ar = ak.zip({k : ak.from_awkward0(v) for k, v in ar_dict.items()}, depth_limit=1)
     return ar
+
+
+def to_parquet(root_filename, output_parquet):
+    ar = to_ak(root_filename)
+    ak.to_parquet(ar, output_parquet)
+
+
+if __name__ == "__main__":
+
+    to_parquet(
+        "root://lcg-lrz-rootd.grid.lrz.de:1094/pnfs/lrz-muenchen.de/data/atlas/dq2/atlaslocalgroupdisk/rucio/data15_13TeV/57/4d/DAOD_PHYSLITE.21568835._000256.pool.root.1",
+        "test.parquet"
+    )
+
