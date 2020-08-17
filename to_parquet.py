@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import awkward1 as ak
 
 def to_ak_uproot4(root_filename, zip=False):
@@ -102,8 +104,10 @@ def to_parquet(root_filename, output_parquet):
 
 if __name__ == "__main__":
 
-    to_parquet(
-        "root://lcg-lrz-rootd.grid.lrz.de:1094/pnfs/lrz-muenchen.de/data/atlas/dq2/atlaslocalgroupdisk/rucio/data15_13TeV/57/4d/DAOD_PHYSLITE.21568835._000256.pool.root.1",
-        "test.parquet"
-    )
+    import argparse
+    parser = argparse.ArgumentParser(description="Convert \"simple\" branches in DAOD_PHYSLITE to parquet")
+    parser.add_argument("input_daod", help="input daod path")
+    parser.add_argument("output_parquet", help="output parquet filename/path")
+    args = parser.parse_args()
 
+    to_parquet(args.input_daod, args.output_parquet)

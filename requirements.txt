@@ -1,0 +1,7 @@
+awkward==0.13.0
+awkward1==0.2.31
+cachetools==4.1.1
+numpy==1.19.1
+pyarrow==1.0.0
+uproot==3.12.0
+uproot-methods==0.7.4
