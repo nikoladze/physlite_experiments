@@ -31,7 +31,8 @@ def _read_big_endian_int(data):
 @numba.njit
 def _read_vector_vector(basket_data, border, num_entries, data_size=4, data_header_size=0):
     d = basket_data
-    buf_size = len(basket_data) // data_size # conservative estimate
+    # estimate - might need to grow the inner offsets (can have many empty entries)
+    buf_size = len(basket_data) // data_size
     offsets_outer = np.empty(num_entries + 1, dtype=np.int64)
     offsets_inner = np.empty(buf_size, dtype=np.int64)
     offsets_outer[0] = 0
@@ -50,6 +51,11 @@ def _read_vector_vector(basket_data, border, num_entries, data_size=4, data_head
         while inner_start < stop:
             n = _read_big_endian_int(d[inner_start: inner_start + 4])
             inner_stop = inner_start + n * (data_size + data_header_size) + 4
+            if total_entries >= len(offsets_inner):
+                # increase the size if not sufficient
+                offsets_inner = np.concatenate(
+                    (offsets_inner, np.empty(buf_size, dtype=np.int64))
+                )
             offsets_inner[total_entries] = offsets_inner[total_entries - 1] + n
             i = inner_start + 4
             while i < inner_stop:
@@ -100,6 +106,10 @@ def branch_to_array_vector_vector_int(branch):
     return branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0)
 
 
+def branch_to_array_vector_vector_double(branch):
+    return branch_to_array_vector_vector(branch, dtype=np.dtype(">f8"), data_size=8, data_header_size=0)
+
+
 def branch_to_array_vector_vector_elementlink(branch):
     return branch_to_array_vector_vector(
         branch, dtype=np.dtype([("m_persKey", ">i4"), ("m_persIndex", ">i4")]), data_size=8, data_header_size=20
@@ -110,6 +120,12 @@ def test_vector_vector_int():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisJetsAuxDyn.NumTrkPt500"]
         assert ak.all(branch.array() == branch_to_array_vector_vector_int(branch))
+
+
+def test_vector_vector_double():
+    with uproot4.open(example_file()) as f:
+        branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.trkpx"]
+        assert ak.all(branch.array() == branch_to_array_vector_vector_double(branch))
 
 
 def test_vector_vector_elementlink():
