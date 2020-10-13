@@ -106,17 +106,6 @@ def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, d
         )
     )
 
-def _branch_to_array_vector_vector_int(branch):
-    return _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0)
-
-
-def _branch_to_array_vector_vector_double(branch):
-    return _branch_to_array_vector_vector(branch, dtype=np.dtype(">f8"), data_size=8, data_header_size=0)
-
-
-def _branch_to_array_vector_vector_float(branch):
-    return _branch_to_array_vector_vector(branch, dtype=np.dtype(">f4"), data_size=4, data_header_size=0)
-
 
 def _branch_to_array_vector_vector_elementlink(branch):
     return _branch_to_array_vector_vector(
@@ -124,7 +113,7 @@ def _branch_to_array_vector_vector_elementlink(branch):
     )
 
 
-def interpretation_is_elementlink(interpretation):
+def interpretation_is_vector_vector(interpretation):
     "... there is probably a better way"
     if not isinstance(interpretation, AsObjects):
         return False
@@ -138,47 +127,47 @@ def interpretation_is_elementlink(interpretation):
         return False
     if interpretation._model.values.header:
         return False
-    if isinstance(interpretation._model.values.values, np.dtype):
-        return False
-    if not "ElementLink_3c_DataVector" in interpretation._model.values.values().__repr__():
-        return False
     return True
 
 
-def branch_to_array(branch, verbose=False):
+def branch_to_array(branch, force_custom=False):
     "Try to deserialize with the custom functions and fall back to uproot"
-    interpretation = branch.interpretation
-    if interpretation_is_elementlink(interpretation):
-        return _branch_to_array_vector_vector_elementlink(branch)
-    elif interpretation == AsObjects(AsVector(True, AsVector(False, np.dtype(">f4")))):
-        return _branch_to_array_vector_vector_float(branch)
-    elif interpretation == AsObjects(AsVector(True, AsVector(False, np.dtype(">f8")))):
-        return _branch_to_array_vector_vector_double(branch)
-    elif interpretation == AsObjects(AsVector(True, AsVector(False, np.dtype(">i4")))):
-        return _branch_to_array_vector_vector_int(branch)
-    else:
-        return branch.array()
+    if interpretation_is_vector_vector(branch.interpretation):
+        values = branch.interpretation._model.values.values
+        if isinstance(values, np.dtype):
+            return _branch_to_array_vector_vector(
+                branch, dtype=values, data_size=values.itemsize, data_header_size=0
+            )
+        else:
+            try:
+                if "ElementLink_3c_DataVector" in values().__repr__():
+                    return _branch_to_array_vector_vector_elementlink(branch)
+            except:
+                pass
+    if force_custom:
+        raise TypeError(f"No custom deserialization for interpretation {branch.interpretation}")
+    return branch.array()
 
 
 def test_vector_vector_int():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisJetsAuxDyn.NumTrkPt500"]
-        assert ak.all(branch.array() == branch_to_array(branch))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
 
 
 def test_vector_vector_double():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.trkpx"]
-        assert ak.all(branch.array() == branch_to_array(branch))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
 
 
 def test_vector_vector_float():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisJetsAuxDyn.TrackWidthPt1000"]
-        assert ak.all(branch.array() == branch_to_array(branch))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
 
 
 def test_vector_vector_elementlink():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisElectronsAuxDyn.trackParticleLinks"]
-        assert ak.all(branch.array() == branch_to_array(branch))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
