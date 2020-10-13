@@ -140,7 +140,7 @@ def branch_to_array(branch, force_custom=False):
             )
         else:
             try:
-                if "ElementLink_3c_DataVector" in values().__repr__():
+                if "ElementLink_3c_DataVector" in values.__name__:
                     return _branch_to_array_vector_vector_elementlink(branch)
             except:
                 pass
