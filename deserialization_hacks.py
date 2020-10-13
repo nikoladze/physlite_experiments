@@ -88,8 +88,10 @@ def branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, da
             oi.append(oi_i)
         else:
             # add last offset from previous basket
-            oo.append(oo_i[1:] + oo[-1][-1])
-            oi.append(oi_i[1:] + oi[-1][-1])
+            if len(oo_i) > 1:
+                oo.append(oo_i[1:] + oo[-1][-1])
+            if len(oi_i) > 1:
+                oi.append(oi_i[1:] + oi[-1][-1])
     oo, oi, ad = [np.concatenate(i) for i in [oo, oi, ad]]
     ad = np.frombuffer(ad.tobytes(), dtype=dtype)
     return ak.Array(
