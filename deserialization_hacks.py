@@ -1,8 +1,10 @@
 import uproot4
+from uproot4 import AsObjects, AsVector
 import os
 import numba
 import numpy as np
 import awkward1 as ak
+
 
 def example_file(
     filename="DAOD_PHYSLITE.art_split99.pool.root",
@@ -71,7 +73,7 @@ def _read_vector_vector(basket_data, border, num_entries, data_size=4, data_head
     return offsets_outer, offsets_inner[:total_entries], actual_data[:total_bytes]
 
 
-def branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0):
+def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0):
     oo, oi, ad = [], [], []
     for i in range(branch.num_baskets):
         basket = branch.basket(i)
@@ -104,33 +106,79 @@ def branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, da
         )
     )
 
-def branch_to_array_vector_vector_int(branch):
-    return branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0)
+def _branch_to_array_vector_vector_int(branch):
+    return _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0)
 
 
-def branch_to_array_vector_vector_double(branch):
-    return branch_to_array_vector_vector(branch, dtype=np.dtype(">f8"), data_size=8, data_header_size=0)
+def _branch_to_array_vector_vector_double(branch):
+    return _branch_to_array_vector_vector(branch, dtype=np.dtype(">f8"), data_size=8, data_header_size=0)
 
 
-def branch_to_array_vector_vector_elementlink(branch):
-    return branch_to_array_vector_vector(
+def _branch_to_array_vector_vector_float(branch):
+    return _branch_to_array_vector_vector(branch, dtype=np.dtype(">f4"), data_size=4, data_header_size=0)
+
+
+def _branch_to_array_vector_vector_elementlink(branch):
+    return _branch_to_array_vector_vector(
         branch, dtype=np.dtype([("m_persKey", ">i4"), ("m_persIndex", ">i4")]), data_size=8, data_header_size=20
     )
+
+
+def interpretation_is_elementlink(interpretation):
+    "... there is probably a better way"
+    if not isinstance(interpretation, AsObjects):
+        return False
+    if not hasattr(interpretation, "_model"):
+        return False
+    if not isinstance(interpretation._model, AsVector):
+        return False
+    if not interpretation._model.header:
+        return False
+    if not isinstance(interpretation._model.values, AsVector):
+        return False
+    if interpretation._model.values.header:
+        return False
+    if isinstance(interpretation._model.values.values, np.dtype):
+        return False
+    if not "ElementLink_3c_DataVector" in interpretation._model.values.values().__repr__():
+        return False
+    return True
+
+
+def branch_to_array(branch, verbose=False):
+    "Try to deserialize with the custom functions and fall back to uproot"
+    interpretation = branch.interpretation
+    if interpretation_is_elementlink(interpretation):
+        return _branch_to_array_vector_vector_elementlink(branch)
+    elif interpretation == AsObjects(AsVector(True, AsVector(False, np.dtype(">f4")))):
+        return _branch_to_array_vector_vector_float(branch)
+    elif interpretation == AsObjects(AsVector(True, AsVector(False, np.dtype(">f8")))):
+        return _branch_to_array_vector_vector_double(branch)
+    elif interpretation == AsObjects(AsVector(True, AsVector(False, np.dtype(">i4")))):
+        return _branch_to_array_vector_vector_int(branch)
+    else:
+        return branch.array()
 
 
 def test_vector_vector_int():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisJetsAuxDyn.NumTrkPt500"]
-        assert ak.all(branch.array() == branch_to_array_vector_vector_int(branch))
+        assert ak.all(branch.array() == branch_to_array(branch))
 
 
 def test_vector_vector_double():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.trkpx"]
-        assert ak.all(branch.array() == branch_to_array_vector_vector_double(branch))
+        assert ak.all(branch.array() == branch_to_array(branch))
+
+
+def test_vector_vector_float():
+    with uproot4.open(example_file()) as f:
+        branch = f["CollectionTree"]["AnalysisJetsAuxDyn.TrackWidthPt1000"]
+        assert ak.all(branch.array() == branch_to_array(branch))
 
 
 def test_vector_vector_elementlink():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisElectronsAuxDyn.trackParticleLinks"]
-        assert ak.all(branch.array() == branch_to_array_vector_vector_elementlink(branch))
+        assert ak.all(branch.array() == branch_to_array(branch))
