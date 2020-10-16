@@ -109,12 +109,22 @@ def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, d
                 oi.append(oi_i[1:] + oi[-1][-1])
     oo, oi, ad = [np.concatenate(i) for i in [oo, oi, ad]]
     ad = np.frombuffer(ad.tobytes(), dtype=dtype)
+    # storing in parquet needs contiguous arrays
+    if ad.dtype.fields is None:
+        ad = ak.Array(ad.newbyteorder().byteswap()).layout
+    else:
+        ad = ak.zip(
+            {
+                k : np.ascontiguousarray(ad[k]).newbyteorder().byteswap()
+                for k in ad.dtype.fields
+            }
+        ).layout
     return ak.Array(
         ak.layout.ListOffsetArray64(
             ak.layout.Index64(oo),
             ak.layout.ListOffsetArray64(
                 ak.layout.Index64(oi),
-                ak.Array(ad.newbyteorder().byteswap()).layout
+                ad
             )
         )
     )
