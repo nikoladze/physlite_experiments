@@ -5,6 +5,7 @@ import numba
 import numpy as np
 import awkward1 as ak
 
+__all__ = ["example_file", "interpretation_is_vector_vector", "branch_to_array", "tree_arrays"]
 
 def example_file(
     filename="DAOD_PHYSLITE.art_split99.pool.root",
@@ -179,6 +180,32 @@ def branch_to_array(branch, force_custom=False):
     if force_custom:
         raise TypeError(f"No custom deserialization for interpretation {branch.interpretation}")
     return branch.array()
+
+
+def tree_arrays(tree, filter_branch=None):
+    """
+    Read all branches from a tree into arrays (using custom deserialization if
+    possible). Optionally takes a filter function that takes a branch and returns
+    True or False.
+
+    Returns a dictionary of (awkward) arrays.
+    """
+
+    array_dict = {}
+
+    def fill_dict(branch):
+        for sub in branch.branches:
+            fill_dict(sub)
+        if len(branch.branches) > 0:
+            return
+        if filter_branch is not None and not filter_branch(branch):
+            return
+        array_dict[branch.name] = branch_to_array(branch)
+
+    fill_dict(tree)
+
+    return array_dict
+
 
 
 def test_vector_vector_int():
