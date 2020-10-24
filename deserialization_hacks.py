@@ -92,44 +92,44 @@ def _read_vector_vector(basket_data, num_entries, data_size=4, data_header_size=
 
 
 def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4):
-    oo, oi, ad = [], [], []
+    offsets_lvl1, offsets_lvl2, data = [], [], []
     for i in range(branch.num_baskets):
         basket = branch.basket(i)
-        oo_i, oi_i, ad_i = _read_vector_vector(
+        offsets_lvl1_i, offsets_lvl2_i, data_i = _read_vector_vector(
             basket.data.tobytes(),
             basket.num_entries,
             data_size=data_size,
             data_header_size=data_header_size,
             num_entries_size=num_entries_size
         )
-        ad.append(ad_i)
-        if len(oo) == 0:
-            oo.append(oo_i)
-            oi.append(oi_i)
+        data.append(data_i)
+        if len(offsets_lvl1) == 0:
+            offsets_lvl1.append(offsets_lvl1_i)
+            offsets_lvl2.append(offsets_lvl2_i)
         else:
             # add last offset from previous basket
-            if len(oo_i) > 1:
-                oo.append(oo_i[1:] + oo[-1][-1])
-            if len(oi_i) > 1:
-                oi.append(oi_i[1:] + oi[-1][-1])
-    oo, oi, ad = [np.concatenate(i) for i in [oo, oi, ad]]
-    ad = np.frombuffer(ad.tobytes(), dtype=dtype)
+            if len(offsets_lvl1_i) > 1:
+                offsets_lvl1.append(offsets_lvl1_i[1:] + offsets_lvl1[-1][-1])
+            if len(offsets_lvl2_i) > 1:
+                offsets_lvl2.append(offsets_lvl2_i[1:] + offsets_lvl2[-1][-1])
+    offsets_lvl1, offsets_lvl2, data = [np.concatenate(i) for i in [offsets_lvl1, offsets_lvl2, data]]
+    data = np.frombuffer(data.tobytes(), dtype=dtype)
     # storing in parquet needs contiguous arrays
-    if ad.dtype.fields is None:
-        ad = ak.Array(ad.newbyteorder().byteswap()).layout
+    if data.dtype.fields is None:
+        data = ak.Array(data.newbyteorder().byteswap()).layout
     else:
-        ad = ak.zip(
+        data = ak.zip(
             {
-                k : np.ascontiguousarray(ad[k]).newbyteorder().byteswap()
-                for k in ad.dtype.fields
+                k : np.ascontiguousarray(data[k]).newbyteorder().byteswap()
+                for k in data.dtype.fields
             }
         ).layout
     return ak.Array(
         ak.layout.ListOffsetArray64(
-            ak.layout.Index64(oo),
+            ak.layout.Index64(offsets_lvl1),
             ak.layout.ListOffsetArray64(
-                ak.layout.Index64(oi),
-                ad
+                ak.layout.Index64(offsets_lvl2),
+                data
             )
         )
     )
