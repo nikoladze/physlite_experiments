@@ -20,7 +20,7 @@ def example_file(
     return filename
 
 
-@numba.njit
+@numba.njit(cache=True)
 def _read_big_endian_int(data):
     "unfortunately np.frombuffer doesn't work in numba with big endian"
     res = 0
@@ -31,10 +31,18 @@ def _read_big_endian_int(data):
     return res
 
 
-@numba.njit
-def _read_vector_vector(basket_data, border, num_entries, data_size=4, data_header_size=0, offset_size=4):
+@numba.njit(cache=True)
+def parse_vector_header(d, pos):
+    num_entries = _read_big_endian_int(d[pos + 6: pos + 10])
+    return pos + 10, num_entries
+
+
+@numba.njit(cache=True)
+def _read_vector_vector(basket_data, num_entries, data_size=4, data_header_size=0, num_entries_size=4):
     """
-    Deserialize raw data bytes that represent a list of vector<vector<some_data_type>>
+    Deserialize raw data bytes that represent a list of
+    vector<vector<some_data_type>>. Only the outermost vector is assumed to
+    have a header.
 
     Parameters:
     -----------
@@ -43,60 +51,56 @@ def _read_vector_vector(basket_data, border, num_entries, data_size=4, data_head
     num_entries: number of events in this basket (e.g. from basket.num_entries)
     data_size: number of bytes for each element
     data_header_size: number of header bytes to skip over (e.g 20 for ElementLink)
-    offset_size: number of bytes that encode the offsets
+    num_entries_size: number of bytes that encode the number of entries for the inner vectors.
+
     """
     d = basket_data
     # estimate - might need to grow the inner offsets (can have many empty entries)
     buf_size = len(basket_data) // data_size
-    offsets_outer = np.empty(num_entries + 1, dtype=np.int64)
-    offsets_inner = np.empty(buf_size, dtype=np.int64)
-    offsets_outer[0] = 0
-    offsets_inner[0] = 0
+    offsets_lvl1 = np.empty(num_entries + 1, dtype=np.int64)
+    offsets_lvl2 = np.empty(buf_size, dtype=np.int64)
+    offsets_lvl1[0] = 0
+    offsets_lvl2[0] = 0
     actual_data = np.empty(len(basket_data), dtype=np.uint8)
-    start = 0
-    i_outer = 1
-    total_entries = 1
-    total_bytes = 0
-    while start < border:
-        nbytes = _read_big_endian_int(d[start + 2: start + 4])
-        stop = start + 4 + nbytes
-        inner_start = start + 10
-        n_outer = _read_big_endian_int(d[start + 6: start + 10])
-        offsets_outer[i_outer] = offsets_outer[i_outer - 1] + n_outer
-        while inner_start < stop:
-            n = _read_big_endian_int(d[inner_start: inner_start + offset_size])
-            inner_stop = inner_start + n * (data_size + data_header_size) + offset_size
-            if total_entries >= len(offsets_inner):
-                # increase the size if not sufficient
-                offsets_inner = np.concatenate(
-                    (offsets_inner, np.empty(buf_size, dtype=np.int64))
+
+    pos = 0
+    i_offset_lvl1 = 1
+    i_offset_lvl2 = 1
+    i_data = 0
+    for i_entry in range(num_entries):
+        pos, num_entries_lvl1 = parse_vector_header(d, pos)
+        offsets_lvl1[i_offset_lvl1] = offsets_lvl1[i_offset_lvl1 - 1] + num_entries_lvl1
+        i_offset_lvl1 += 1
+        for i_entry_lvl1 in range(num_entries_lvl1):
+            num_entries_lvl2 = _read_big_endian_int(d[pos: pos + num_entries_size])
+            if i_offset_lvl2 >= len(offsets_lvl2):
+                # grow if nescessary
+                offsets_lvl2 = np.concatenate(
+                    (offsets_lvl2, np.empty(buf_size, dtype=np.int64))
                 )
-            offsets_inner[total_entries] = offsets_inner[total_entries - 1] + n
-            i = inner_start + offset_size
-            while i < inner_stop:
-                i += data_header_size
-                for ii in range(data_size):
-                    actual_data[total_bytes] = d[i + ii]
-                    total_bytes += 1
-                i += data_size
-            total_entries += 1
-            inner_start = inner_stop
-        i_outer += 1
-        start = inner_start
-    return offsets_outer, offsets_inner[:total_entries], actual_data[:total_bytes]
+            offsets_lvl2[i_offset_lvl2] = offsets_lvl2[i_offset_lvl2 - 1] + num_entries_lvl2
+            i_offset_lvl2 += 1
+            pos += num_entries_size
+            for i_entry_lvl2 in range(num_entries_lvl2):
+                pos += data_header_size
+                for _ in range(data_size):
+                    actual_data[i_data] = d[pos]
+                    i_data += 1
+                    pos += 1
+
+    return offsets_lvl1, offsets_lvl2[:i_offset_lvl2], actual_data[:i_data]
 
 
-def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, offset_size=4):
+def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4):
     oo, oi, ad = [], [], []
     for i in range(branch.num_baskets):
         basket = branch.basket(i)
         oo_i, oi_i, ad_i = _read_vector_vector(
-            basket.raw_data.tobytes(),
-            basket.border,
+            basket.data.tobytes(),
             basket.num_entries,
             data_size=data_size,
             data_header_size=data_header_size,
-            offset_size=offset_size
+            num_entries_size=num_entries_size
         )
         ad.append(ad_i)
         if len(oo) == 0:
@@ -138,7 +142,7 @@ def _branch_to_array_vector_vector_elementlink(branch):
 
 
 def _branch_to_array_vector_string(branch):
-    array = _branch_to_array_vector_vector(branch, dtype=np.uint8, data_size=1, offset_size=1)
+    array = _branch_to_array_vector_vector(branch, dtype=np.uint8, data_size=1, num_entries_size=1)
     array.layout.content.setparameter("__array__", "string")
     array.layout.content.content.setparameter("__array__", "char")
     return array
