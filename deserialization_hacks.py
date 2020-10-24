@@ -281,14 +281,36 @@ def interpretation_is_vector_vector(interpretation):
         return False
     if interpretation._model.values.header:
         return False
+    if isinstance(interpretation._model.values.values, AsVector):
+        # vector<vector<vector
+        return False
     return True
+
+
+_other_custom = {
+    "AsObjects(AsVector(True, AsVector(False, AsVector(False, dtype('>u8')))))" : (
+        lambda branch : _branch_to_array_vector_vector_vector(
+            branch, dtype=np.dtype(">u8"), data_size=8
+        )
+    ),
+    "AsObjects(AsVector(True, AsVector(False, AsVector(False, dtype('uint8')))))" : (
+        lambda branch : _branch_to_array_vector_vector_vector(
+            branch, dtype=np.dtype(">i1"), data_size=1
+        )
+    ),
+    "AsObjects(AsVector(True, AsSet(False, dtype('>u4'))))" : (
+        lambda branch : _branch_to_array_vector_vector(
+            branch, dtype=np.dtype(">u4"), data_size=4
+        )
+    )
+}
 
 
 def branch_to_array(branch, force_custom=False):
     "Try to deserialize with the custom functions and fall back to uproot"
     if branch.interpretation == AsObjects(AsVector(True, AsString(False))):
         return _branch_to_array_vector_string(branch)
-    if interpretation_is_vector_vector(branch.interpretation):
+    elif interpretation_is_vector_vector(branch.interpretation):
         values = branch.interpretation._model.values.values
         if isinstance(values, np.dtype):
             return _branch_to_array_vector_vector(
@@ -300,6 +322,8 @@ def branch_to_array(branch, force_custom=False):
                     return _branch_to_array_vector_vector_elementlink(branch)
             except:
                 pass
+    elif str(branch.interpretation) in _other_custom:
+        return _other_custom[str(branch.interpretation)](branch)
     if force_custom:
         raise TypeError(f"No custom deserialization for interpretation {branch.interpretation}")
     return branch.array()
@@ -364,4 +388,9 @@ def test_vector_string():
 def test_vector_vector_vector():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.overlapIndices"]
-        assert ak.all(branch.array() == _branch_to_array_vector_vector_vector(branch, dtype=np.dtype(">u8"), data_size=8))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+
+def test_vector_vector_vector2():
+    with uproot4.open(example_file()) as f:
+        branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.overlapTypes"]
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
