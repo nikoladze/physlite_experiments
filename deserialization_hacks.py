@@ -1,9 +1,10 @@
-import uproot4
-from uproot4 import AsObjects, AsVector, AsString
+import uproot
+import uproot as uproot4
+from uproot import AsObjects, AsVector, AsString
 import os
 import numba
 import numpy as np
-import awkward1 as ak
+import awkward as ak
 
 __all__ = ["example_file", "interpretation_is_vector_vector", "branch_to_array", "tree_arrays"]
 
