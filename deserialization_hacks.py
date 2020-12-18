@@ -377,7 +377,11 @@ def test_vector_vector_float():
 def test_vector_vector_elementlink():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisElectronsAuxDyn.trackParticleLinks"]
-        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+        array1 = branch.array()
+        array2 = branch_to_array(branch, force_custom=True)
+        assert set(array1.fields) == set(array2.fields)
+        for field in array1.fields:
+            assert ak.all(array1[field] == array2[field])
 
 
 def test_vector_string():
