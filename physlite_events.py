@@ -6,11 +6,23 @@ encapsulating the full event data model, similar to coffea NanoEvents
 
 from copy import deepcopy
 import json
-from deserialization_hacks import branch_to_array
 import uproot
 from uproot.interpretation.objects import CannotBeAwkward
 import awkward as ak
 import numpy as np
+from deserialization_hacks import branch_to_array
+from behavior import xAODParticle, xAODTrackParticle
+
+behavior_dict = {
+    "Electrons": "xAODParticle",
+    "Muons": "xAODParticle",
+    "Jets": "xAODParticle",
+    "CombinedMuonTrackParticles": "xAODTrackParticle",
+    "ExtrapolatedMuonTrackParticles": "xAODTrackParticle",
+    "GSFTrackParticles": "xAODTrackParticle",
+    "InDetTrackParticles": "xAODTrackParticle",
+    "MuonSpectrometerTrackParticle": "xAODTrackParticle",
+}
 
 
 def get_branch_forms(uproot_tree):
@@ -61,6 +73,10 @@ def get_lazy_form(branch_forms):
                     "content": {"class": "RecordArray", "contents": {}},
                     "form_key": f"{key}%offsets",
                 }
+                if ak_top_key in behavior_dict:
+                    form["contents"][ak_top_key]["parameters"] = {
+                        "__record__": behavior_dict[ak_top_key]
+                    }
             apply(
                 form["contents"][ak_top_key]["content"]["contents"],
                 form_dict["content"],
