@@ -42,4 +42,4 @@ class xAODTrackParticle(vector.LorentzVector):
 
     @property
     def t(self):
-        return np.sqrt(139.570 ** 2 + sef.x ** 2 + self.y ** 2 + self.z ** 2)
+        return np.sqrt(139.570 ** 2 + self.x ** 2 + self.y ** 2 + self.z ** 2)
