@@ -67,16 +67,18 @@ def get_lazy_form(branch_forms):
         # top level will be "zipped"
         if form_dict["class"] == "ListOffsetArray64":
             if not ak_top_key in form["contents"]:
+                parameters = {}
                 form["contents"][ak_top_key] = {
                     "class": "ListOffsetArray64",
                     "offsets": "i64",
-                    "content": {"class": "RecordArray", "contents": {}},
+                    "content": {"class": "RecordArray", "contents": {}, "parameters" : parameters},
                     "form_key": f"{key}%offsets",
                 }
                 if ak_top_key in behavior_dict:
                     form["contents"][ak_top_key]["parameters"] = {
-                        "__record__": behavior_dict[ak_top_key]
+                        "__record__" : behavior_dict[ak_top_key],
                     }
+                    parameters["__record__"] = behavior_dict[ak_top_key]
             apply(
                 form["contents"][ak_top_key]["content"]["contents"],
                 form_dict["content"],
