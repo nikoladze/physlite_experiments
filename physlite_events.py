@@ -117,9 +117,12 @@ def physlite_events(uproot_tree, json_form=None, verbose=False):
     if json_form is None:
         form = get_lazy_form(get_branch_forms(uproot_tree))
         json_form = json.dumps(form)
-    return ak.from_buffers(
-        json_form, uproot_tree.num_entries, LazyGet(f, verbose=verbose), lazy=True
+    ar_container = [0]
+    ar = ak.from_buffers(
+        json_form, uproot_tree.num_entries, LazyGet(f, verbose=verbose), lazy=True, behavior={"__events__" : ar_container}
     )
+    ar_container[0] = ar
+    return ar
 
 
 if __name__ == "__main__":
