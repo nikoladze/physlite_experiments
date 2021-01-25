@@ -14,15 +14,38 @@ from deserialization_hacks import branch_to_array
 from behavior import xAODParticle, xAODTrackParticle
 
 behavior_dict = {
-    "Electrons": "xAODParticle",
+    "Electrons": "xAODElectron",
     "Muons": "xAODParticle",
     "Jets": "xAODParticle",
+    "TauJets" : "xAODParticle",
     "CombinedMuonTrackParticles": "xAODTrackParticle",
     "ExtrapolatedMuonTrackParticles": "xAODTrackParticle",
     "GSFTrackParticles": "xAODTrackParticle",
     "InDetTrackParticles": "xAODTrackParticle",
     "MuonSpectrometerTrackParticle": "xAODTrackParticle",
 }
+
+
+def get_branch_names():
+
+    branch_names = {}
+
+    # TODO: parse this from MetaData/EventFormat once member wise splitting can
+    # be read from uproot
+    with open("branch_names_hashes_log.txt") as f:
+        for l in f:
+            l = l.strip()
+            if l.startswith("**"):
+                continue
+            if not l.startswith("*"):
+                continue
+            fields = l.split()
+            if fields[1] == "Row":
+                continue
+            branch_name, branch_hash = fields[5], fields[7]
+            branch_names[int(branch_hash)] = branch_name
+
+    return branch_names
 
 
 def get_branch_forms(uproot_tree):
@@ -71,12 +94,16 @@ def get_lazy_form(branch_forms):
                 form["contents"][ak_top_key] = {
                     "class": "ListOffsetArray64",
                     "offsets": "i64",
-                    "content": {"class": "RecordArray", "contents": {}, "parameters" : parameters},
+                    "content": {
+                        "class": "RecordArray",
+                        "contents": {},
+                        "parameters": parameters,
+                    },
                     "form_key": f"{key}%offsets",
                 }
                 if ak_top_key in behavior_dict:
                     form["contents"][ak_top_key]["parameters"] = {
-                        "__record__" : behavior_dict[ak_top_key],
+                        "__record__": behavior_dict[ak_top_key],
                     }
                     parameters["__record__"] = behavior_dict[ak_top_key]
             apply(
@@ -119,8 +146,13 @@ def physlite_events(uproot_tree, json_form=None, verbose=False):
         json_form = json.dumps(form)
     ar_container = [0]
     ar = ak.from_buffers(
-        json_form, uproot_tree.num_entries, LazyGet(f, verbose=verbose), lazy=True, behavior={"__events__" : ar_container}
+        json_form,
+        uproot_tree.num_entries,
+        LazyGet(f, verbose=verbose),
+        lazy=True,
+        behavior={"__events__": ar_container},
     )
+    ar = ak.with_parameter(ar, "branch_names", get_branch_names())
     ar_container[0] = ar
     return ar
 
