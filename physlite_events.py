@@ -15,7 +15,7 @@ from behavior import xAODParticle, xAODTrackParticle
 
 behavior_dict = {
     "Electrons": "xAODElectron",
-    "Muons": "xAODParticle",
+    "Muons": "xAODMuon",
     "Jets": "xAODParticle",
     "TauJets" : "xAODParticle",
     "CombinedMuonTrackParticles": "xAODTrackParticle",
@@ -23,6 +23,19 @@ behavior_dict = {
     "GSFTrackParticles": "xAODTrackParticle",
     "InDetTrackParticles": "xAODTrackParticle",
     "MuonSpectrometerTrackParticle": "xAODTrackParticle",
+    "TruthBoson" : "xAODParticle",
+    "TruthBosonsWithDecayParticles" : "xAODParticle",
+    "TruthBosonsWithDecayVertices" : "xAODParticle",
+    "TruthBottom" : "xAODParticle",
+    "TruthElectrons" : "xAODParticle",
+    "TruthEvents" : "xAODParticle",
+    "TruthMuons" : "xAODParticle",
+    "TruthNeutrinos" : "xAODParticle",
+    "TruthPhotons" : "xAODParticle",
+    "TruthPrimaryVertices" : "xAODParticle",
+    "TruthTop" : "xAODParticle",
+    "TruthTaus" : "xAODParticle",
+    "TruthForwardProtons" : "xAODParticle",
 }
 
 
@@ -50,15 +63,24 @@ def get_branch_names():
 
 def get_branch_forms(uproot_tree):
     forms = {}
-    # TODO: include the non-"Dyn"-branches - like MET association
-    for key, branch in uproot_tree.iteritems(filter_name="*AuxDyn.*"):
-        if "/" in key:
-            continue
+
+    def add(key, branch):
         try:
             ak_form = branch.interpretation.awkward_form(None)
             forms[key] = ak_form
         except CannotBeAwkward:
             print("Can't interpret", key)
+
+    # TODO: include the non-"Dyn"-branches - like MET association
+    for key, branch in uproot_tree.iteritems(filter_name="*AuxDyn.*"):
+        if "/" in key:
+            continue
+        if len(branch.branches) == 0:
+            add(key, branch)
+        else:
+            for sub_branch in branch.branches:
+                sub_key = sub_branch.name
+                add(sub_key, sub_branch)
     return forms
 
 
@@ -83,7 +105,9 @@ def get_lazy_form(branch_forms):
     form = {"class": "RecordArray", "contents": {}}
 
     for key, ak_form in branch_forms.items():
-        top_key, sub_key = key.split(".")
+        key_fields = key.split(".")
+        top_key = key_fields[0]
+        sub_key = ".".join(key_fields[1:])
         ak_top_key = top_key.replace("Analysis", "").replace("AuxDyn", "")
         form_dict = json.loads(ak_form.tojson())
 
@@ -131,7 +155,7 @@ class LazyGet:
         attrs = key.split("%")
         key = attrs[0]
         attrs = attrs[1:]
-        ar = branch_to_array(tree[key]).layout
+        ar = branch_to_array(self.tree[key]).layout
         for attr in attrs:
             if attr in ["content", "offsets"]:
                 ar = getattr(ar, attr)
@@ -148,7 +172,7 @@ def physlite_events(uproot_tree, json_form=None, verbose=False):
     ar = ak.from_buffers(
         json_form,
         uproot_tree.num_entries,
-        LazyGet(f, verbose=verbose),
+        LazyGet(uproot_tree, verbose=verbose),
         lazy=True,
         behavior={"__events__": ar_container},
     )
@@ -158,6 +182,9 @@ def physlite_events(uproot_tree, json_form=None, verbose=False):
 
 
 if __name__ == "__main__":
+
+    from importlib import reload
+    import behavior
 
     f = uproot.open("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
     tree = f["CollectionTree"]
