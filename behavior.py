@@ -15,21 +15,17 @@ class xAODEvents:
         collection1 = self
         keys = np.unique(ak.to_numpy(ak.flatten(links.m_persKey, axis=None)))
         if len(keys) >= 2:
-            collections = [
-                self._events[self._events.branch_names[key]]
-                for key in keys
-            ]
+            collections = [self._events[self._events.branch_names[key]] for key in keys]
             return collections, keys, links.m_persIndex, links.m_persKey
             # TODO: how to handle thinned tracks - maybe the ones with m_persKey == 0?
             # need to filter, but then maybe the structure changes (becomes IndexedArray)
             # but maybe that is not really a problem, because we use it flattened below?
+            # -> probably also need to use masked arrays
 
             # TODO: now need to construct a union as content
         else:
-            self._events.branch_names # TODO: seems i need to touch this first - what's going on?
-            collection2 = self._events[
-                self._events.branch_names[keys[0]]
-            ]
+            self._events.branch_names  # TODO: seems i need to touch this first - what's going on?
+            collection2 = self._events[self._events.branch_names[keys[0]]]
             (
                 offsets_collection2,
                 content_collection2,
@@ -38,6 +34,8 @@ class xAODEvents:
         _, content_links = links.layout.offsets_and_flatten()
         offsets_inner, _ = content_links.offsets_and_flatten()
         # TODO: probably this doesn't work anymore if the array became indexed/masked?
+        # Need to do something like in NanoEvents where the index is made "global"
+        # -> need to create these virtual arrays as well (form key local2global)
         return ak.Array(
             ak.layout.ListOffsetArray64(
                 offsets_outer,
@@ -79,11 +77,9 @@ class xAODElectron(xAODParticle):
 class xAODMuon(xAODParticle):
     @property
     def trackParticle(self):
-        # TODO: doesn't really work like that if there are indeed invalid links ...
-        # (will have different offsets as muon container)
-        # need to deal with the other types of links
+        # TODO: need to deal with the other types of links
         return self._events.CombinedMuonTrackParticles[
-            self["combinedTrackParticleLink.m_persIndex"][
+            self["combinedTrackParticleLink.m_persIndex"].mask[
                 self["combinedTrackParticleLink.m_persKey"] != 0
             ]
         ]
