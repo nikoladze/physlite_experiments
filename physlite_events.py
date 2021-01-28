@@ -176,7 +176,7 @@ def physlite_events(uproot_tree, json_form=None, verbose=False):
         lazy=True,
         behavior={"__events__": ar_container},
     )
-    ar = ak.with_parameter(ar, "branch_names", get_branch_names())
+    ar.branch_names = get_branch_names()
     ar_container[0] = ar
     return ar
 
