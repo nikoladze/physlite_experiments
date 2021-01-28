@@ -17,25 +17,25 @@ behavior_dict = {
     "Electrons": "xAODElectron",
     "Muons": "xAODMuon",
     "Jets": "xAODParticle",
-    "TauJets" : "xAODParticle",
+    "TauJets": "xAODParticle",
     "CombinedMuonTrackParticles": "xAODTrackParticle",
     "ExtrapolatedMuonTrackParticles": "xAODTrackParticle",
     "GSFTrackParticles": "xAODTrackParticle",
     "InDetTrackParticles": "xAODTrackParticle",
     "MuonSpectrometerTrackParticle": "xAODTrackParticle",
-    "TruthBoson" : "xAODParticle",
-    "TruthBosonsWithDecayParticles" : "xAODParticle",
-    "TruthBosonsWithDecayVertices" : "xAODParticle",
-    "TruthBottom" : "xAODParticle",
-    "TruthElectrons" : "xAODParticle",
-    "TruthEvents" : "xAODParticle",
-    "TruthMuons" : "xAODParticle",
-    "TruthNeutrinos" : "xAODParticle",
-    "TruthPhotons" : "xAODParticle",
-    "TruthPrimaryVertices" : "xAODParticle",
-    "TruthTop" : "xAODParticle",
-    "TruthTaus" : "xAODParticle",
-    "TruthForwardProtons" : "xAODParticle",
+    "TruthBoson": "xAODParticle",
+    "TruthBosonsWithDecayParticles": "xAODParticle",
+    "TruthBosonsWithDecayVertices": "xAODParticle",
+    "TruthBottom": "xAODParticle",
+    "TruthElectrons": "xAODParticle",
+    "TruthEvents": "xAODParticle",
+    "TruthMuons": "xAODParticle",
+    "TruthNeutrinos": "xAODParticle",
+    "TruthPhotons": "xAODParticle",
+    "TruthPrimaryVertices": "xAODParticle",
+    "TruthTop": "xAODParticle",
+    "TruthTaus": "xAODParticle",
+    "TruthForwardProtons": "xAODParticle",
 }
 
 
@@ -144,9 +144,12 @@ def get_lazy_form(branch_forms):
 
 
 class LazyGet:
-    def __init__(self, tree, verbose=False):
+    def __init__(self, tree, verbose=False, cache=None):
         self.tree = tree
         self.verbose = verbose
+        self.cache = cache
+        if self.cache is None:
+            self.cache = {}
 
     def __getitem__(self, key):
         if self.verbose:
@@ -155,30 +158,49 @@ class LazyGet:
         attrs = key.split("%")
         key = attrs[0]
         attrs = attrs[1:]
-        ar = branch_to_array(self.tree[key]).layout
+        if key in self.cache:
+            ar = self.cache[key]
+        else:
+            if self.verbose:
+                print("Cache miss for ", key)
+            ar = branch_to_array(self.tree[key])
+            self.cache[key] = ar
+        ar = ar.layout
         for attr in attrs:
             if attr in ["content", "offsets"]:
                 ar = getattr(ar, attr)
             else:
                 ar = ar[attr]
-        return np.array(ar)
+        return np.asarray(ar)
 
 
-def physlite_events(uproot_tree, json_form=None, verbose=False):
-    if json_form is None:
+class Factory:
+    def __init__(self, form, length, container):
+        self.branch_names = get_branch_names()
+        self.form = form
+        self.length = length
+        self.container = container
+        events_container = [0]
+        self.events = ak.from_buffers(
+            self.form,
+            self.length,
+            self.container,
+            lazy=True,
+            behavior={"__events__": events_container},
+        )
+        self.events.branch_names = self.branch_names
+        events_container[0] = self.events
+
+    @classmethod
+    def from_tree(cls, uproot_tree, verbose=False):
         form = get_lazy_form(get_branch_forms(uproot_tree))
-        json_form = json.dumps(form)
-    ar_container = [0]
-    ar = ak.from_buffers(
-        json_form,
-        uproot_tree.num_entries,
-        LazyGet(uproot_tree, verbose=verbose),
-        lazy=True,
-        behavior={"__events__": ar_container},
-    )
-    ar.branch_names = get_branch_names()
-    ar_container[0] = ar
-    return ar
+        form = json.dumps(form)
+        container = LazyGet(uproot_tree, verbose=verbose)
+        return cls(form, uproot_tree.num_entries, container)
+
+
+def physlite_events(uproot_tree, verbose=False):
+    return Factory.from_tree(uproot_tree, verbose=verbose).events
 
 
 if __name__ == "__main__":
