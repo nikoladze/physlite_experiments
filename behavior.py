@@ -56,7 +56,7 @@ class xAODEvents:
 
 
 @ak.mixin_class(ak.behavior)
-class xAODParticle(vector.PtEtaPhiELorentzVector, xAODEvents):
+class xAODParticle(vector.PtEtaPhiMLorentzVector, xAODEvents):
     @property
     def mass(self):
         return self.m
