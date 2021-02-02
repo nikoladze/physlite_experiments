@@ -10,8 +10,8 @@ import uproot
 from uproot.interpretation.objects import CannotBeAwkward
 import awkward as ak
 import numpy as np
-from deserialization_hacks import branch_to_array
-from behavior import xAODParticle, xAODTrackParticle
+from physlite_experiments.deserialization_hacks import branch_to_array
+from physlite_experiments.behavior import xAODParticle, xAODTrackParticle
 
 behavior_dict = {
     "Electrons": "xAODElectron",
@@ -45,7 +45,9 @@ def get_branch_names():
 
     # TODO: parse this from MetaData/EventFormat once member wise splitting can
     # be read from uproot
-    with open("branch_names_hashes_log.txt") as f:
+    import os
+    module_dir = os.path.dirname(__file__)
+    with open(os.path.join(module_dir, "data/branch_names_hashes_log.txt")) as f:
         for l in f:
             l = l.strip()
             if l.startswith("**"):
@@ -206,7 +208,7 @@ def physlite_events(uproot_tree, verbose=False):
 if __name__ == "__main__":
 
     from importlib import reload
-    import behavior
+    from physlite_experiments import behavior
 
     f = uproot.open("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
     tree = f["CollectionTree"]

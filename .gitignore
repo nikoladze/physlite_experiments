@@ -1,0 +1,7 @@
+*.root
+*.npz
+*.parquet
+*.h5
+*.egg-info
+__pycache__
+.ipynb_checkpoints
