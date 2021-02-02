@@ -209,8 +209,12 @@ if __name__ == "__main__":
 
     from importlib import reload
     from physlite_experiments import behavior
+    import argparse
+    parser = argparse.ArgumentParser(description='Test physlite_events')
+    parser.add_argument("input_file", default="user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root", nargs="?")
+    args = parser.parse_args()
 
-    f = uproot.open("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
+    f = uproot.open(args.input_file)
     tree = f["CollectionTree"]
     events = physlite_events(tree, verbose=True)
 
