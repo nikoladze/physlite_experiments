@@ -75,6 +75,10 @@ def get_branch_forms(uproot_tree):
 
     # TODO: include the non-"Dyn"-branches - like MET association
     for key, branch in uproot_tree.iteritems(filter_name="*AuxDyn.*"):
+        if any([s in key for s in ["streamTag", "subEvent"]]) or "-" in key:
+            # TODO: what's going on here?
+            print("Skipping", key)
+            continue
         if "/" in key:
             continue
         if len(branch.branches) == 0:
