@@ -5,6 +5,7 @@ import os
 import numba
 import numpy as np
 import awkward as ak
+import queue
 
 __all__ = ["example_file", "interpretation_is_vector_vector", "branch_to_array", "tree_arrays"]
 
@@ -159,10 +160,44 @@ def _read_vector_vector_vector(basket_data, num_entries, data_size=4, data_heade
     return offsets_lvl1, offsets_lvl2[:i_offset_lvl2], offsets_lvl3[:i_offset_lvl3], actual_data[:i_data]
 
 
+def _get_baskets(branch):
+    notifications = queue.Queue()
+    source = branch._file._source
+
+    basket_chunks = []
+    basket_ids = {}
+    for i in range(branch.num_baskets):
+        start = branch.member("fBasketSeek")[i]
+        stop = start + branch.basket_compressed_bytes(i)
+        basket_chunks.append((int(start), int(stop)))
+        basket_ids[start, stop] = i
+
+    def chunk_to_basket(chunk, basket_num):
+        cursor = uproot.source.cursor.Cursor(chunk.start)
+        return uproot.models.TBasket.Model_TBasket.read(
+            chunk,
+            cursor,
+            {"basket_num": basket_num},
+            branch._file,
+            branch._file,
+            branch,
+        )
+
+    source.chunks(basket_chunks, notifications)
+    result_baskets = {}
+    for i in range(len(basket_chunks)):
+        chunk = notifications.get(timeout=10)
+        basket_num = basket_ids[chunk.start, chunk.stop]
+        result_baskets[basket_num] = chunk_to_basket(chunk, basket_num)
+
+    return result_baskets
+
+
 def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4):
     offsets_lvl1, offsets_lvl2, data = [], [], []
+    baskets = _get_baskets(branch)
     for i in range(branch.num_baskets):
-        basket = branch.basket(i)
+        basket = baskets[i]
         offsets_lvl1_i, offsets_lvl2_i, data_i = _read_vector_vector(
             basket.data.tobytes(),
             basket.num_entries,
@@ -205,8 +240,9 @@ def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, d
 
 def _branch_to_array_vector_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4):
     offsets_lvl1, offsets_lvl2, offsets_lvl3, data = [], [], [], []
+    baskets = _get_baskets(branch)
     for i in range(branch.num_baskets):
-        basket = branch.basket(i)
+        basket = baskets[i]
         offsets_lvl1_i, offsets_lvl2_i, offsets_lvl3_i, data_i = _read_vector_vector_vector(
             basket.data.tobytes(),
             basket.num_entries,
