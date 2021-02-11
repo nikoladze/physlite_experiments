@@ -160,13 +160,24 @@ def _read_vector_vector_vector(basket_data, num_entries, data_size=4, data_heade
     return offsets_lvl1, offsets_lvl2[:i_offset_lvl2], offsets_lvl3[:i_offset_lvl3], actual_data[:i_data]
 
 
-def _get_baskets(branch):
+def _get_baskets(branch, entry_start=None, entry_stop=None):
     notifications = queue.Queue()
     source = branch._file._source
 
     basket_chunks = []
     basket_ids = {}
+    entry_starts, entry_stops = (
+        branch.member("fBasketEntry")[:-1],
+        branch.member("fBasketEntry")[1:]
+    )
+    basket_entries = branch.member("fBasketEntry")
     for i in range(branch.num_baskets):
+
+        if entry_start is not None and entry_stops[i] <= entry_start:
+            continue
+        if entry_stop is not None and entry_starts[i] >= entry_stop:
+            break
+
         start = branch.member("fBasketSeek")[i]
         stop = start + branch.basket_compressed_bytes(i)
         basket_chunks.append((int(start), int(stop)))
@@ -193,10 +204,29 @@ def _get_baskets(branch):
     return result_baskets
 
 
-def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4):
+def _get_start_stop(first_basket_start, num_entries, entry_start, entry_stop):
+    stop = entry_stop or num_entries
+    start = entry_start or 0
+    num_entries = stop - start
+    this_entry_start = start - first_basket_start
+    this_entry_stop = this_entry_start + num_entries
+    return this_entry_start, this_entry_stop
+
+
+def _branch_to_array_vector_vector(
+    branch,
+    dtype=np.dtype(">i4"),
+    data_size=4,
+    data_header_size=0,
+    num_entries_size=4,
+    entry_start=None,
+    entry_stop=None,
+):
     offsets_lvl1, offsets_lvl2, data = [], [], []
-    baskets = _get_baskets(branch)
-    for i in range(branch.num_baskets):
+    baskets = _get_baskets(
+        branch, entry_start=entry_start, entry_stop=entry_stop
+    )
+    for i in sorted(baskets):
         basket = baskets[i]
         offsets_lvl1_i, offsets_lvl2_i, data_i = _read_vector_vector(
             basket.data.tobytes(),
@@ -227,7 +257,7 @@ def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, d
                 for k in data.dtype.fields
             }
         ).layout
-    return ak.Array(
+    array =  ak.Array(
         ak.layout.ListOffsetArray64(
             ak.layout.Index64(offsets_lvl1),
             ak.layout.ListOffsetArray64(
@@ -236,6 +266,15 @@ def _branch_to_array_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, d
             )
         )
     )
+    if entry_start is not None or entry_stop is not None:
+        start, stop = _get_start_stop(
+            baskets[min(baskets)].entry_start_stop[0],
+            branch.num_entries,
+            entry_start,
+            entry_stop
+        )
+        array = array[start: stop]
+    return array
 
 
 def _branch_to_array_vector_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4):
@@ -291,14 +330,20 @@ def _branch_to_array_vector_vector_vector(branch, dtype=np.dtype(">i4"), data_si
     )
 
 
-def _branch_to_array_vector_vector_elementlink(branch):
+def _branch_to_array_vector_vector_elementlink(branch, **kwargs):
     return _branch_to_array_vector_vector(
-        branch, dtype=np.dtype([("m_persKey", ">i4"), ("m_persIndex", ">i4")]), data_size=8, data_header_size=20
+        branch,
+        dtype=np.dtype([("m_persKey", ">i4"), ("m_persIndex", ">i4")]),
+        data_size=8,
+        data_header_size=20,
+        **kwargs
     )
 
 
-def _branch_to_array_vector_string(branch):
-    array = _branch_to_array_vector_vector(branch, dtype=np.uint8, data_size=1, num_entries_size=1)
+def _branch_to_array_vector_string(branch, **kwargs):
+    array = _branch_to_array_vector_vector(
+        branch, dtype=np.uint8, data_size=1, num_entries_size=1, **kwargs
+    )
     array.layout.content.setparameter("__array__", "string")
     array.layout.content.content.setparameter("__array__", "char")
     return array
@@ -326,44 +371,44 @@ def interpretation_is_vector_vector(interpretation):
 
 _other_custom = {
     "AsObjects(AsVector(True, AsVector(False, AsVector(False, dtype('>u8')))))" : (
-        lambda branch : _branch_to_array_vector_vector_vector(
-            branch, dtype=np.dtype(">u8"), data_size=8
+        lambda branch, **kwargs : _branch_to_array_vector_vector_vector(
+            branch, dtype=np.dtype(">u8"), data_size=8, **kwargs
         )
     ),
     "AsObjects(AsVector(True, AsVector(False, AsVector(False, dtype('uint8')))))" : (
-        lambda branch : _branch_to_array_vector_vector_vector(
-            branch, dtype=np.dtype(">i1"), data_size=1
+        lambda branch, **kwargs : _branch_to_array_vector_vector_vector(
+            branch, dtype=np.dtype(">i1"), data_size=1, **kwargs
         )
     ),
     "AsObjects(AsVector(True, AsSet(False, dtype('>u4'))))" : (
-        lambda branch : _branch_to_array_vector_vector(
-            branch, dtype=np.dtype(">u4"), data_size=4
+        lambda branch, **kwargs : _branch_to_array_vector_vector(
+            branch, dtype=np.dtype(">u4"), data_size=4, **kwargs
         )
     )
 }
 
 
-def branch_to_array(branch, force_custom=False):
+def branch_to_array(branch, force_custom=False, **kwargs):
     "Try to deserialize with the custom functions and fall back to uproot"
     if branch.interpretation == AsObjects(AsVector(True, AsString(False))):
-        return _branch_to_array_vector_string(branch)
+        return _branch_to_array_vector_string(branch, **kwargs)
     elif interpretation_is_vector_vector(branch.interpretation):
         values = branch.interpretation._model.values.values
         if isinstance(values, np.dtype):
             return _branch_to_array_vector_vector(
-                branch, dtype=values, data_size=values.itemsize, data_header_size=0
+                branch, dtype=values, data_size=values.itemsize, data_header_size=0, **kwargs
             )
         else:
             try:
                 if "ElementLink_3c_DataVector" in values.__name__:
-                    return _branch_to_array_vector_vector_elementlink(branch)
+                    return _branch_to_array_vector_vector_elementlink(branch, **kwargs)
             except:
                 pass
     elif str(branch.interpretation) in _other_custom:
-        return _other_custom[str(branch.interpretation)](branch)
+        return _other_custom[str(branch.interpretation)](branch, **kwargs)
     if force_custom:
         raise TypeError(f"No custom deserialization for interpretation {branch.interpretation}")
-    return branch.array()
+    return branch.array(**kwargs)
 
 
 def tree_arrays(tree, filter_branch=None):
