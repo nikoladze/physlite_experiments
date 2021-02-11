@@ -515,3 +515,23 @@ def test_vector_vector_vector2():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.overlapTypes"]
         assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+
+
+def test_start_stop():
+    with uproot4.open(example_file()) as f:
+        branch = f["CollectionTree"]["AnalysisElectronsAuxDyn.trackParticleLinks"]
+        rnd = (
+            [0]
+            + sorted(np.random.randint(branch.num_entries, size=5))
+            + [branch.num_entries]
+        )
+        for start, stop in zip(rnd[:-1], rnd[1:]):
+            array1 = branch.array(entry_start=start, entry_stop=stop)
+            array2 = branch_to_array(
+                branch,
+                force_custom=True,
+                entry_start=start,
+                entry_stop=stop,
+            )
+            for field in array1.fields:
+                assert ak.all(array1[field] == array2[field])
