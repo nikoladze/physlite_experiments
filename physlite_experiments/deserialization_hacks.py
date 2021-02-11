@@ -7,15 +7,22 @@ import numpy as np
 import awkward as ak
 import queue
 
-__all__ = ["example_file", "interpretation_is_vector_vector", "branch_to_array", "tree_arrays"]
+__all__ = [
+    "example_file",
+    "interpretation_is_vector_vector",
+    "branch_to_array",
+    "tree_arrays",
+]
+
 
 def example_file(
     filename="DAOD_PHYSLITE.art_split99.pool.root",
-    url="https://cernbox.cern.ch/index.php/s/xTuPIvSJsP3QmXa/download"
+    url="https://cernbox.cern.ch/index.php/s/xTuPIvSJsP3QmXa/download",
 ):
     if not os.path.exists(filename):
         print(f"Downloading {url} to {filename}")
         import requests
+
         res = requests.get(url)
         with open(filename, "wb") as of:
             of.write(res.content)
@@ -35,12 +42,14 @@ def _read_big_endian_int(data):
 
 @numba.njit(cache=True)
 def parse_vector_header(d, pos):
-    num_entries = _read_big_endian_int(d[pos + 6: pos + 10])
+    num_entries = _read_big_endian_int(d[pos + 6 : pos + 10])
     return pos + 10, num_entries
 
 
 @numba.njit(cache=True)
-def _read_vector_vector(basket_data, num_entries, data_size=4, data_header_size=0, num_entries_size=4):
+def _read_vector_vector(
+    basket_data, num_entries, data_size=4, data_header_size=0, num_entries_size=4
+):
     """
     Deserialize raw data bytes that represent a list of
     vector<vector<some_data_type>>. Only the outermost vector is assumed to
@@ -74,13 +83,15 @@ def _read_vector_vector(basket_data, num_entries, data_size=4, data_header_size=
         offsets_lvl1[i_offset_lvl1] = offsets_lvl1[i_offset_lvl1 - 1] + num_entries_lvl1
         i_offset_lvl1 += 1
         for i_entry_lvl1 in range(num_entries_lvl1):
-            num_entries_lvl2 = _read_big_endian_int(d[pos: pos + num_entries_size])
+            num_entries_lvl2 = _read_big_endian_int(d[pos : pos + num_entries_size])
             if i_offset_lvl2 >= len(offsets_lvl2):
                 # grow if nescessary
                 offsets_lvl2 = np.concatenate(
                     (offsets_lvl2, np.empty(buf_size, dtype=np.int64))
                 )
-            offsets_lvl2[i_offset_lvl2] = offsets_lvl2[i_offset_lvl2 - 1] + num_entries_lvl2
+            offsets_lvl2[i_offset_lvl2] = (
+                offsets_lvl2[i_offset_lvl2 - 1] + num_entries_lvl2
+            )
             i_offset_lvl2 += 1
             pos += num_entries_size
             for i_entry_lvl2 in range(num_entries_lvl2):
@@ -94,7 +105,9 @@ def _read_vector_vector(basket_data, num_entries, data_size=4, data_header_size=
 
 
 @numba.njit(cache=True)
-def _read_vector_vector_vector(basket_data, num_entries, data_size=4, data_header_size=0, num_entries_size=4):
+def _read_vector_vector_vector(
+    basket_data, num_entries, data_size=4, data_header_size=0, num_entries_size=4
+):
     """
     Deserialize raw data bytes that represent a list of
     vector<vector<vector<some_data_type>>>. Only the outermost vector is assumed to
@@ -131,23 +144,27 @@ def _read_vector_vector_vector(basket_data, num_entries, data_size=4, data_heade
         offsets_lvl1[i_offset_lvl1] = offsets_lvl1[i_offset_lvl1 - 1] + num_entries_lvl1
         i_offset_lvl1 += 1
         for i_entry_lvl1 in range(num_entries_lvl1):
-            num_entries_lvl2 = _read_big_endian_int(d[pos: pos + num_entries_size])
+            num_entries_lvl2 = _read_big_endian_int(d[pos : pos + num_entries_size])
             if i_offset_lvl2 >= len(offsets_lvl2):
                 # grow if nescessary
                 offsets_lvl2 = np.concatenate(
                     (offsets_lvl2, np.empty(buf_size, dtype=np.int64))
                 )
-            offsets_lvl2[i_offset_lvl2] = offsets_lvl2[i_offset_lvl2 - 1] + num_entries_lvl2
+            offsets_lvl2[i_offset_lvl2] = (
+                offsets_lvl2[i_offset_lvl2 - 1] + num_entries_lvl2
+            )
             i_offset_lvl2 += 1
             pos += num_entries_size
             for i_entry_lvl2 in range(num_entries_lvl2):
-                num_entries_lvl3 = _read_big_endian_int(d[pos: pos + num_entries_size])
+                num_entries_lvl3 = _read_big_endian_int(d[pos : pos + num_entries_size])
                 if i_offset_lvl3 >= len(offsets_lvl3):
                     # grow if nescessary
                     offsets_lvl3 = np.concatenate(
                         (offsets_lvl3, np.empty(buf_size, dtype=np.int64))
                     )
-                offsets_lvl3[i_offset_lvl3] = offsets_lvl3[i_offset_lvl3 - 1] + num_entries_lvl3
+                offsets_lvl3[i_offset_lvl3] = (
+                    offsets_lvl3[i_offset_lvl3 - 1] + num_entries_lvl3
+                )
                 i_offset_lvl3 += 1
                 pos += num_entries_size
                 for i_entry_lvl3 in range(num_entries_lvl3):
@@ -157,7 +174,12 @@ def _read_vector_vector_vector(basket_data, num_entries, data_size=4, data_heade
                         i_data += 1
                         pos += 1
 
-    return offsets_lvl1, offsets_lvl2[:i_offset_lvl2], offsets_lvl3[:i_offset_lvl3], actual_data[:i_data]
+    return (
+        offsets_lvl1,
+        offsets_lvl2[:i_offset_lvl2],
+        offsets_lvl3[:i_offset_lvl3],
+        actual_data[:i_data],
+    )
 
 
 def _get_baskets(branch, entry_start=None, entry_stop=None):
@@ -168,7 +190,7 @@ def _get_baskets(branch, entry_start=None, entry_stop=None):
     basket_ids = {}
     entry_starts, entry_stops = (
         branch.member("fBasketEntry")[:-1],
-        branch.member("fBasketEntry")[1:]
+        branch.member("fBasketEntry")[1:],
     )
     basket_entries = branch.member("fBasketEntry")
     for i in range(branch.num_baskets):
@@ -223,9 +245,7 @@ def _branch_to_array_vector_vector(
     entry_stop=None,
 ):
     offsets_lvl1, offsets_lvl2, data = [], [], []
-    baskets = _get_baskets(
-        branch, entry_start=entry_start, entry_stop=entry_stop
-    )
+    baskets = _get_baskets(branch, entry_start=entry_start, entry_stop=entry_stop)
     for i in sorted(baskets):
         basket = baskets[i]
         offsets_lvl1_i, offsets_lvl2_i, data_i = _read_vector_vector(
@@ -233,7 +253,7 @@ def _branch_to_array_vector_vector(
             basket.num_entries,
             data_size=data_size,
             data_header_size=data_header_size,
-            num_entries_size=num_entries_size
+            num_entries_size=num_entries_size,
         )
         data.append(data_i)
         if len(offsets_lvl1) == 0:
@@ -245,7 +265,9 @@ def _branch_to_array_vector_vector(
                 offsets_lvl1.append(offsets_lvl1_i[1:] + offsets_lvl1[-1][-1])
             if len(offsets_lvl2_i) > 1:
                 offsets_lvl2.append(offsets_lvl2_i[1:] + offsets_lvl2[-1][-1])
-    offsets_lvl1, offsets_lvl2, data = [np.concatenate(i) for i in [offsets_lvl1, offsets_lvl2, data]]
+    offsets_lvl1, offsets_lvl2, data = [
+        np.concatenate(i) for i in [offsets_lvl1, offsets_lvl2, data]
+    ]
     data = np.frombuffer(data.tobytes(), dtype=dtype)
     # storing in parquet needs contiguous arrays
     if data.dtype.fields is None:
@@ -253,17 +275,17 @@ def _branch_to_array_vector_vector(
     else:
         data = ak.zip(
             {
-                k : np.ascontiguousarray(data[k]).newbyteorder().byteswap()
+                k: np.ascontiguousarray(data[k]).newbyteorder().byteswap()
                 for k in data.dtype.fields
             }
         ).layout
-    array =  ak.Array(
+    array = ak.Array(
         ak.layout.ListOffsetArray64(
             ak.layout.Index64(offsets_lvl1),
             ak.layout.ListOffsetArray64(
                 ak.layout.Index64(offsets_lvl2),
-                data
-            )
+                data,
+            ),
         )
     )
     if entry_start is not None or entry_stop is not None:
@@ -271,23 +293,30 @@ def _branch_to_array_vector_vector(
             baskets[min(baskets)].entry_start_stop[0],
             branch.num_entries,
             entry_start,
-            entry_stop
+            entry_stop,
         )
-        array = array[start: stop]
+        array = array[start:stop]
     return array
 
 
-def _branch_to_array_vector_vector_vector(branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4):
+def _branch_to_array_vector_vector_vector(
+    branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4
+):
     offsets_lvl1, offsets_lvl2, offsets_lvl3, data = [], [], [], []
     baskets = _get_baskets(branch)
     for i in range(branch.num_baskets):
         basket = baskets[i]
-        offsets_lvl1_i, offsets_lvl2_i, offsets_lvl3_i, data_i = _read_vector_vector_vector(
+        (
+            offsets_lvl1_i,
+            offsets_lvl2_i,
+            offsets_lvl3_i,
+            data_i,
+        ) = _read_vector_vector_vector(
             basket.data.tobytes(),
             basket.num_entries,
             data_size=data_size,
             data_header_size=data_header_size,
-            num_entries_size=num_entries_size
+            num_entries_size=num_entries_size,
         )
         data.append(data_i)
         if len(offsets_lvl1) == 0:
@@ -312,7 +341,7 @@ def _branch_to_array_vector_vector_vector(branch, dtype=np.dtype(">i4"), data_si
     else:
         data = ak.zip(
             {
-                k : np.ascontiguousarray(data[k]).newbyteorder().byteswap()
+                k: np.ascontiguousarray(data[k]).newbyteorder().byteswap()
                 for k in data.dtype.fields
             }
         ).layout
@@ -323,10 +352,10 @@ def _branch_to_array_vector_vector_vector(branch, dtype=np.dtype(">i4"), data_si
                 ak.layout.Index64(offsets_lvl2),
                 ak.layout.ListOffsetArray64(
                     ak.layout.Index64(offsets_lvl3),
-                    data
-                )
-            )
-        )
+                    data,
+                ),
+            ),
+        ),
     )
 
 
@@ -336,7 +365,7 @@ def _branch_to_array_vector_vector_elementlink(branch, **kwargs):
         dtype=np.dtype([("m_persKey", ">i4"), ("m_persIndex", ">i4")]),
         data_size=8,
         data_header_size=20,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -370,21 +399,21 @@ def interpretation_is_vector_vector(interpretation):
 
 
 _other_custom = {
-    "AsObjects(AsVector(True, AsVector(False, AsVector(False, dtype('>u8')))))" : (
-        lambda branch, **kwargs : _branch_to_array_vector_vector_vector(
+    "AsObjects(AsVector(True, AsVector(False, AsVector(False, dtype('>u8')))))": (
+        lambda branch, **kwargs: _branch_to_array_vector_vector_vector(
             branch, dtype=np.dtype(">u8"), data_size=8, **kwargs
         )
     ),
-    "AsObjects(AsVector(True, AsVector(False, AsVector(False, dtype('uint8')))))" : (
-        lambda branch, **kwargs : _branch_to_array_vector_vector_vector(
+    "AsObjects(AsVector(True, AsVector(False, AsVector(False, dtype('uint8')))))": (
+        lambda branch, **kwargs: _branch_to_array_vector_vector_vector(
             branch, dtype=np.dtype(">i1"), data_size=1, **kwargs
         )
     ),
-    "AsObjects(AsVector(True, AsSet(False, dtype('>u4'))))" : (
-        lambda branch, **kwargs : _branch_to_array_vector_vector(
+    "AsObjects(AsVector(True, AsSet(False, dtype('>u4'))))": (
+        lambda branch, **kwargs: _branch_to_array_vector_vector(
             branch, dtype=np.dtype(">u4"), data_size=4, **kwargs
         )
-    )
+    ),
 }
 
 
@@ -396,7 +425,11 @@ def branch_to_array(branch, force_custom=False, **kwargs):
         values = branch.interpretation._model.values.values
         if isinstance(values, np.dtype):
             return _branch_to_array_vector_vector(
-                branch, dtype=values, data_size=values.itemsize, data_header_size=0, **kwargs
+                branch,
+                dtype=values,
+                data_size=values.itemsize,
+                data_header_size=0,
+                **kwargs,
             )
         else:
             try:
@@ -407,7 +440,9 @@ def branch_to_array(branch, force_custom=False, **kwargs):
     elif str(branch.interpretation) in _other_custom:
         return _other_custom[str(branch.interpretation)](branch, **kwargs)
     if force_custom:
-        raise TypeError(f"No custom deserialization for interpretation {branch.interpretation}")
+        raise TypeError(
+            f"No custom deserialization for interpretation {branch.interpretation}"
+        )
     return branch.array(**kwargs)
 
 
@@ -434,7 +469,6 @@ def tree_arrays(tree, filter_branch=None):
     fill_dict(tree)
 
     return array_dict
-
 
 
 def test_vector_vector_int():
@@ -475,6 +509,7 @@ def test_vector_vector_vector():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.overlapIndices"]
         assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+
 
 def test_vector_vector_vector2():
     with uproot4.open(example_file()) as f:
