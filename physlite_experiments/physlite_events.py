@@ -150,12 +150,19 @@ def get_lazy_form(branch_forms):
 
 
 class LazyGet:
-    def __init__(self, tree, verbose=False, cache=None):
+    def __init__(
+        self,
+        tree,
+        verbose=False,
+        cache=None,
+        entry_start=None,
+        entry_stop=None
+    ):
         self.tree = tree
         self.verbose = verbose
         self.cache = cache
-        if self.cache is None:
-            self.cache = {}
+        self.entry_start = entry_start
+        self.entry_stop = entry_stop
 
     def __getitem__(self, key):
         if self.verbose:
@@ -164,12 +171,17 @@ class LazyGet:
         attrs = key.split("%")
         key = attrs[0]
         attrs = attrs[1:]
-        if key in self.cache:
+        if self.cache is not None and key in self.cache:
             ar = self.cache[key]
         else:
             if self.verbose:
                 print("Cache miss for ", key)
-            ar = branch_to_array(self.tree[key])
+            ar = branch_to_array(
+                self.tree[key],
+                entry_start=self.entry_start,
+                entry_stop=self.entry_stop,
+            )
+        if self.cache is not None:
             self.cache[key] = ar
         ar = ar.layout
         for attr in attrs:
@@ -177,11 +189,12 @@ class LazyGet:
                 ar = getattr(ar, attr)
             else:
                 ar = ar[attr]
-        return np.asarray(ar)
+        ar = np.asarray(ar)
+        return ar
 
 
 class Factory:
-    def __init__(self, form, length, container):
+    def __init__(self, form, length, container, **kwargs):
         self.branch_names = get_branch_names()
         self.form = form
         self.length = length
@@ -193,20 +206,28 @@ class Factory:
             self.container,
             lazy=True,
             behavior={"__events__": events_container},
+            **kwargs
         )
         self.events.branch_names = self.branch_names
         events_container[0] = self.events
 
     @classmethod
-    def from_tree(cls, uproot_tree, verbose=False):
+    def from_tree(
+            cls, uproot_tree, verbose=False, entry_start=None, entry_stop=None
+    ):
         form = get_lazy_form(get_branch_forms(uproot_tree))
         form = json.dumps(form)
-        container = LazyGet(uproot_tree, verbose=verbose)
-        return cls(form, uproot_tree.num_entries, container)
+        container = LazyGet(
+            uproot_tree, verbose=verbose, entry_start=entry_start, entry_stop=entry_stop
+        )
+        start = entry_start or 0
+        stop = entry_stop or uproot_tree.num_entries
+        length = stop - start
+        return cls(form, length, container)
 
 
-def physlite_events(uproot_tree, verbose=False):
-    return Factory.from_tree(uproot_tree, verbose=verbose).events
+def physlite_events(uproot_tree, **kwargs):
+    return Factory.from_tree(uproot_tree, **kwargs).events
 
 
 if __name__ == "__main__":

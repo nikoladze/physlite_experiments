@@ -279,6 +279,18 @@ def _branch_to_array_vector_vector(
                 for k in data.dtype.fields
             }
         ).layout
+    if entry_start is not None or entry_stop is not None:
+        start, stop = _get_start_stop(
+            baskets[min(baskets)].entry_start_stop[0],
+            branch.num_entries,
+            entry_start,
+            entry_stop,
+        )
+        offsets_lvl1 = offsets_lvl1[start: stop + 1]
+        offsets_lvl2 = offsets_lvl2[offsets_lvl1[0]: offsets_lvl1[-1] + 1]
+        data = data[offsets_lvl2[0]: offsets_lvl2[-1]]
+        offsets_lvl1 -= offsets_lvl1[0]
+        offsets_lvl2 -= offsets_lvl2[0]
     array = ak.Array(
         ak.layout.ListOffsetArray64(
             ak.layout.Index64(offsets_lvl1),
@@ -288,14 +300,6 @@ def _branch_to_array_vector_vector(
             ),
         )
     )
-    if entry_start is not None or entry_stop is not None:
-        start, stop = _get_start_stop(
-            baskets[min(baskets)].entry_start_stop[0],
-            branch.num_entries,
-            entry_start,
-            entry_stop,
-        )
-        array = array[start:stop]
     return array
 
 
