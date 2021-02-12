@@ -8,7 +8,7 @@ ak.behavior.update(vector.behavior)
 class xAODEvents:
     @property
     def _events(self):
-        return self.behavior["__events__"][0]
+        return self.behavior["__events__"][0]()
 
     def element_link(self, links):
         links = links[links.m_persKey != 0]

@@ -12,6 +12,7 @@ import awkward as ak
 import numpy as np
 from physlite_experiments.deserialization_hacks import branch_to_array
 from physlite_experiments.behavior import xAODParticle, xAODTrackParticle
+import weakref
 
 behavior_dict = {
     "Electrons": "xAODElectron",
@@ -209,7 +210,7 @@ class Factory:
             **kwargs
         )
         self.events.branch_names = self.branch_names
-        events_container[0] = self.events
+        events_container[0] = weakref.ref(self.events)
 
     @classmethod
     def from_tree(
