@@ -50,8 +50,8 @@ letter_dict_array = {
 }
 
 
-def filter_branch(branch):
-    k = branch.name
+def filter_name(name):
+    k = name
 
     if "-" in k:
         # we want to do MakeClass later, which can't deal with that

@@ -450,10 +450,10 @@ def branch_to_array(branch, force_custom=False, **kwargs):
     return branch.array(**kwargs)
 
 
-def tree_arrays(tree, filter_branch=None):
+def tree_arrays(tree, filter_name=None):
     """
     Read all branches from a tree into arrays (using custom deserialization if
-    possible). Optionally takes a filter function that takes a branch and returns
+    possible). Optionally takes a filter function that takes a branch name and returns
     True or False.
 
     Returns a dictionary of (awkward) arrays.
@@ -466,7 +466,7 @@ def tree_arrays(tree, filter_branch=None):
             fill_dict(sub)
         if len(branch.branches) > 0:
             return
-        if filter_branch is not None and not filter_branch(branch):
+        if filter_name is not None and not filter_name(branch.name):
             return
         array_dict[branch.name] = branch_to_array(branch)
 
