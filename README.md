@@ -10,3 +10,15 @@ git clone https://gitlab.cern.ch/nihartma/physlite-experiments.git
 cd physlite-experiments
 pip install -e ./
 ```
+
+## Table of content
+
+Some notable scripts, modules and notebooks:
+
+* [notebooks/physlite_experiments.ipynb](notebooks/physlite_experiments.ipynb): Summary of the current status of what can be done in terms reading data from ROOT files, converting to other formats and representing as awkward array
+* [physlite_experiments/physlite_events.py](physlite_experiments/physlite_events.py): Attempt to mimic [coffea NanoEvents](https://github.com/CoffeaTeam/coffea/tree/master/coffea/nanoevents). In the long run, a schema for PHYSLITE and nescessary functionality should be included into coffea.
+* [physlite_experiments/analysis_example.py](physlite_experiments/analysis_example.py): Example analysis, trying to reproduce object selections for Electrons, Muons and Jets to compare to a SUSYTools analysis.
+* [notebooks/columnar_vs_st.ipynb](notebooks/columnar_vs_st.ipynb): Notebook for validating that analysis and running a few timing studies.
+* [scripts/convert_to_basic_root.py](scripts/convert_to_basic_root.py): Scripts to convert into more basic ROOT formats (e.g. without any custom classes or with only one level of jagged plain arrays)
+* [physlite_experiments/proper_xrdfile.py](physlite_experiments/proper_xrdfile.py): Example for reading a parquet file via xrootd
+
