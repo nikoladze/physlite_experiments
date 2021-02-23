@@ -7,6 +7,7 @@ import numpy as np
 from array import array
 from physlite_experiments.deserialization_hacks import tree_arrays
 from tqdm import tqdm
+import warnings
 
 typename_dict = {
     'bool' : 'char',
@@ -51,6 +52,10 @@ letter_dict_array = {
 
 def filter_branch(branch):
     k = branch.name
+
+    if "-" in k:
+        # we want to do MakeClass later, which can't deal with that
+        return False
 
     if not "Aux" in k:
         return False
@@ -157,78 +162,111 @@ def write_branch_dict_root(branch_dict, rootfile, entry_stop=None):
     tree.Write()
     f.Close()
 
-BUFSIZE = 10000
 
 def write_branch_dict_root_flat(branch_dict, rootfile, entry_stop=None):
-
-    branch_objects = {}
-    for branch_name, branch_array in branch_dict.items():
-        typestr = str(ak.type(branch_array))
-        nptype = typestr.split("*")[-1].strip()
-        branch_objects[branch_name] = {}
-        if typestr.count("var") == 2:
-            branch_objects[branch_name]["n"] = array(f"i", [0])
-            branch_objects[branch_name]["n1"] = np.empty(BUFSIZE, dtype=np.int32)
-            branch_objects[branch_name]["data"] = np.empty(BUFSIZE, dtype=getattr(np, nptype))
-        elif typestr.count("var") == 1:
-            branch_objects[branch_name]["n"] = array(f"i", [0])
-            branch_objects[branch_name]["n1"] = np.empty(BUFSIZE, dtype=np.int32)
-            branch_objects[branch_name]["data"] = np.empty(BUFSIZE, dtype=getattr(np, nptype))
-        else:
-            branch_objects[branch_name]["data"] = array(f"{letter_dict_array[nptype]}", [0])
-
-
-    # TODO: continue here
-
-    typestrings = [str(ak.type(i)) for i in branch_dict.values()]
 
     f = ROOT.TFile.Open(rootfile, "RECREATE")
     tree = ROOT.TTree("tree", "tree")
 
-    # create branches
+    BUFSIZE = 10000
+
+    # create objects and branches
+    count_branches = {}
+    branch_objects = {}
     for branch_name, branch_array in branch_dict.items():
         typestr = str(ak.type(branch_array))
         nptype = typestr.split("*")[-1].strip()
+        if nptype == "string":
+            warnings.warn(f"Skipping {branch_name} of type {nptype}")
+            continue
+        branch_objects[branch_name] = {}
+        if typestr.count("var") == 2:
+            branch_objects[branch_name]["nm"] = array(f"i", [0])
+            branch_objects[branch_name]["n"] = array(f"i", [0])
+            branch_objects[branch_name]["m"] = np.empty(BUFSIZE, dtype=np.int32)
+            branch_objects[branch_name]["data"] = np.empty(BUFSIZE, dtype=getattr(np, nptype))
+        elif typestr.count("var") == 1:
+            branch_objects[branch_name]["n"] = array(f"i", [0])
+            branch_objects[branch_name]["data"] = np.empty(BUFSIZE, dtype=getattr(np, nptype))
+        else:
+            branch_objects[branch_name]["data"] = array(f"{letter_dict_array[nptype]}", [0])
+
         if "var" in typestr:
-            o = branch_objects[branch_name]
-            if isinstance(o, tuple):
-                o = o[1]
-            tree.Branch(branch_name, o)
+            count_branch = branch_name.split(".")[0]
+            if not count_branch in count_branches:
+                # n-entries level 1
+                tree.Branch(
+                    f"n{count_branch}",
+                    branch_objects[branch_name]["n"],
+                    f"n{count_branch}/I",
+                )
+                count_branches[count_branch] = branch_objects[branch_name]["n"]
+            if typestr.count("var") == 1:
+                tree.Branch(
+                    branch_name,
+                    branch_objects[branch_name]["data"],
+                    f"{branch_name}[n{count_branch}]/{letter_dict_root[nptype]}"
+                )
+            if typestr.count("var") == 2:
+                # n-entries level 1 (flattened)
+                tree.Branch(
+                    f"n{branch_name}",
+                    branch_objects[branch_name]["nm"],
+                    f"n{branch_name}/I",
+                )
+                # data (also flattened)
+                tree.Branch(
+                    f"{branch_name}",
+                    branch_objects[branch_name]["data"],
+                    f"{branch_name}[n{branch_name}]/{letter_dict_root[nptype]}"
+                )
+                # n-entries level 2
+                # (length of count branch)
+                tree.Branch(
+                    f"m{branch_name}",
+                    branch_objects[branch_name]["m"],
+                    f"m{branch_name}[n{count_branch}]/I",
+                )
         else:
             tree.Branch(
-                branch_name,
-                branch_objects[branch_name],
+                f"{branch_name}",
+                branch_objects[branch_name]["data"],
                 f"{branch_name}/{letter_dict_root[nptype]}"
             )
 
     # loop over entries and fill tree
     nevents = len(next(iter(branch_dict.values())))
+    typestrings = [str(ak.type(i)) for i in branch_dict.values()]
     for e in tqdm(range(nevents) if entry_stop is None else range(entry_stop)):
         for ts, [bname, bval] in zip(typestrings, branch_dict.items()):
+            if not bname in branch_objects:
+                continue
+            event = bval[e]
+            if "var" in ts:
+                count_branch = bname.split(".")[0]
+                n = len(event)
+                count_branches[count_branch][0] = n
+                if n == 0:
+                    continue
             if ts.count("var") == 1:
-                branch_objects[bname].clear()
-                for v in bval[e]:
-                    branch_objects[bname].push_back(v)
+                branch_objects[bname]["data"][:n] = ak.to_numpy(event)
             elif ts.count("var") == 2:
-                tmpvec, vec = branch_objects[bname]
-                vec.clear()
-                for i in bval[e]:
-                    tmpvec.clear()
-                    for j in i:
-                        tmpvec.push_back(j)
-                        vec.push_back(tmpvec)
+                flat = ak.to_numpy(ak.flatten(event))
+                nm = len(flat)
+                branch_objects[bname]["nm"][0] = nm
+                branch_objects[bname]["data"][:nm] = flat
+                branch_objects[bname]["m"][:n] = ak.to_numpy(ak.num(event))
             else:
-                branch_objects[bname][0] = bval[e]
+                branch_objects[bname]["data"][0] = event
         tree.Fill()
 
     tree.Write()
     f.Close()
 
+    return tree
 
 
 if __name__ == "__main__":
 
-    # branch_dict = read_physlite_flat("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
-    # write_branch_dict_root(branch_dict, "physlite_flat.root")
-
-    pass
+    branch_dict = read_physlite_flat("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
+    write_branch_dict_root_flat(branch_dict, "physlite_flat.root")
