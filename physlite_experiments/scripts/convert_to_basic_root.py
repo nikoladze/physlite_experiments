@@ -163,9 +163,12 @@ def write_branch_dict_root(branch_dict, rootfile, entry_stop=None):
     f.Close()
 
 
-def write_branch_dict_root_flat(branch_dict, rootfile, entry_stop=None):
+def write_branch_dict_root_flat(branch_dict, rootfile, entry_stop=None, lz4=False):
 
-    f = ROOT.TFile.Open(rootfile, "RECREATE")
+    if lz4:
+        f = ROOT.TFile.Open(rootfile, "RECREATE", "", ROOT.CompressionSettings(ROOT.kLZ4, 1))
+    else:
+        f = ROOT.TFile.Open(rootfile, "RECREATE")
     tree = ROOT.TTree("tree", "tree")
     tree.SetAutoFlush(3 * 1024 ** 3)
 
@@ -273,6 +276,6 @@ if __name__ == "__main__":
 
     branch_dict = read_physlite_flat("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
     for nentries in [1250, 2500, 5000, 10000]:
-        output_file = f"physlite_flat_{nentries}.root"
+        output_file = f"physlite_flat_lz4_{nentries}.root"
         print(f"Writing {output_file}")
-        write_branch_dict_root_flat(branch_dict, output_file, entry_stop=nentries)
+        write_branch_dict_root_flat(branch_dict, output_file, entry_stop=nentries, lz4=True)
