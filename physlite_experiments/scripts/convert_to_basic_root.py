@@ -50,8 +50,8 @@ letter_dict_array = {
 }
 
 
-def filter_name(name):
-    k = name
+def filter_branch(branch):
+    k = branch.name
 
     if "-" in k:
         # we want to do MakeClass later, which can't deal with that
@@ -167,6 +167,7 @@ def write_branch_dict_root_flat(branch_dict, rootfile, entry_stop=None):
 
     f = ROOT.TFile.Open(rootfile, "RECREATE")
     tree = ROOT.TTree("tree", "tree")
+    tree.SetAutoFlush(3 * 1024 ** 3)
 
     BUFSIZE = 10000
 
@@ -234,6 +235,8 @@ def write_branch_dict_root_flat(branch_dict, rootfile, entry_stop=None):
                 f"{branch_name}/{letter_dict_root[nptype]}"
             )
 
+    tree.SetBasketSize("*", 1024 ** 3)
+
     # loop over entries and fill tree
     nevents = len(next(iter(branch_dict.values())))
     typestrings = [str(ak.type(i)) for i in branch_dict.values()]
@@ -269,4 +272,7 @@ def write_branch_dict_root_flat(branch_dict, rootfile, entry_stop=None):
 if __name__ == "__main__":
 
     branch_dict = read_physlite_flat("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
-    write_branch_dict_root_flat(branch_dict, "physlite_flat.root")
+    for nentries in [1250, 2500, 5000, 10000]:
+        output_file = f"physlite_flat_{nentries}.root"
+        print(f"Writing {output_file}")
+        write_branch_dict_root_flat(branch_dict, output_file, entry_stop=nentries)

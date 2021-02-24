@@ -29,7 +29,10 @@ def to_parquet(
         verbose=False,
         **kwargs
 ):
+    entry_stop = kwargs.pop("entry_stop", None)
     ar = to_ak(input_daod, zip=zip, verbose=verbose)
+    if entry_stop is not None:
+        ar = ar[:entry_stop]
     ak.to_parquet(ar, output_parquet, **kwargs)
 
 
@@ -41,6 +44,7 @@ if __name__ == "__main__":
     parser.add_argument("output_parquet", help="output parquet filename/path")
     parser.add_argument("--zip", action="store_true", help="zip Collections (e.g. group Electrons, Muons, Jets)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Print all skipped branches")
+    parser.add_argument("--entry-stop", help="only convert up to this number of entries", type=int)
     args = parser.parse_args()
 
     to_parquet(**vars(args))
