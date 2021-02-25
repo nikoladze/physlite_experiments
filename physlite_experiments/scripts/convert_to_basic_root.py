@@ -5,9 +5,10 @@ import uproot
 import awkward as ak
 import numpy as np
 from array import array
-from physlite_experiments.deserialization_hacks import tree_arrays
 from tqdm import tqdm
 import warnings
+from physlite_experiments.deserialization_hacks import tree_arrays
+from physlite_experiments.utils import example_file
 
 typename_dict = {
     'bool' : 'char',
@@ -183,6 +184,21 @@ def write_branch_dict_root_flat(branch_dict, rootfile, entry_stop=None, lz4=Fals
         if nptype == "string":
             warnings.warn(f"Skipping {branch_name} of type {nptype}")
             continue
+        if branch_name in [
+            "xTrigDecisionAux.lvl2PassedPhysics",
+            "xTrigDecisionAux.efPassedPhysics",
+            "xTrigDecisionAux.lvl2PassedRaw",
+            "xTrigDecisionAux.efPassedRaw",
+            "xTrigDecisionAux.lvl2PassedThrough",
+            "xTrigDecisionAux.efPassedThrough",
+            "xTrigDecisionAux.lvl2Prescaled",
+            "xTrigDecisionAux.efPrescaled",
+            "xTrigDecisionAux.lvl2Resurrected",
+            "xTrigDecisionAux.efResurrected",
+            "EventInfoAuxDyn.mcEventWeights",
+        ]:
+            warnings.warn(f"Skipping {branch_name} (doesn't fit naming scheme)")
+            continue
         branch_objects[branch_name] = {}
         if typestr.count("var") == 2:
             branch_objects[branch_name]["nm"] = array(f"i", [0])
@@ -252,8 +268,6 @@ def write_branch_dict_root_flat(branch_dict, rootfile, entry_stop=None, lz4=Fals
                 count_branch = bname.split(".")[0]
                 n = len(event)
                 count_branches[count_branch][0] = n
-                if n == 0:
-                    continue
             if ts.count("var") == 1:
                 branch_objects[bname]["data"][:n] = ak.to_numpy(event)
             elif ts.count("var") == 2:
@@ -272,10 +286,60 @@ def write_branch_dict_root_flat(branch_dict, rootfile, entry_stop=None, lz4=Fals
     return tree
 
 
+def unflatten_double_jagged(branch_dict, key):
+    m = branch_dict["m" + key]
+    c = branch_dict[key]
+    return ak.Array(
+        ak.layout.ListOffsetArray64(
+            m.layout.offsets,
+            ak.layout.ListOffsetArray64(
+                ak.layout.Index64(
+                    np.cumsum(np.append([0], m.layout.content))
+                ),
+                c.layout.content
+            )
+        )
+    )
+
+
+def unflatten(branch_dict):
+    branch_dict = dict(branch_dict)
+    for mkey in [k for k in branch_dict if k.startswith("m")]:
+        akey = mkey[1:]
+        branch_dict[akey] = unflatten_double_jagged(branch_dict, akey)
+    return branch_dict
+
+
+def test_flat_root(tmpdir):
+    branch_dict = read_physlite_flat(example_file())
+    root_path = str(tmpdir / "test.root")
+    write_branch_dict_root_flat(branch_dict, root_path)
+    with uproot.open(f"{root_path}:tree") as tree:
+        new_branch_dict = {k : v.array() for k, v in tree.iteritems()}
+    new_branch_dict = unflatten(new_branch_dict)
+    for k in branch_dict:
+        if not k in new_branch_dict:
+            continue
+        try:
+            assert ak.all(branch_dict[k] == new_branch_dict[k])
+        except:
+            print(k)
+            raise
+
+
 if __name__ == "__main__":
 
-    branch_dict = read_physlite_flat("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
-    for nentries in [1250, 2500, 5000, 10000]:
-        output_file = f"physlite_flat_lz4_{nentries}.root"
-        print(f"Writing {output_file}")
-        write_branch_dict_root_flat(branch_dict, output_file, entry_stop=nentries, lz4=True)
+    pass
+
+    # branch_dict = read_physlite_flat("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
+    # # for nentries in [1250, 2500, 5000, 10000]:
+    # #     output_file = f"physlite_flat_lz4_{nentries}.root"
+    # #     print(f"Writing {output_file}")
+    # #     write_branch_dict_root_flat(branch_dict, output_file, entry_stop=nentries, lz4=True)
+    # write_branch_dict_root_flat(branch_dict, "test.root", entry_stop=10)
+
+    branch_dict = read_physlite_flat(example_file())
+    write_branch_dict_root_flat(branch_dict, "test.root")
+    tree = uproot.open("test.root:tree")
+    arrays = {k: v.array() for k, v in tree.iteritems()}
+    arrays_unflat = unflatten(arrays)

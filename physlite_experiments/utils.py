@@ -1,5 +1,20 @@
+import os
 import awkward as ak
 import uproot
+
+
+def example_file(
+    filename="DAOD_PHYSLITE.art_split99.pool.root",
+    url="https://cernbox.cern.ch/index.php/s/xTuPIvSJsP3QmXa/download",
+):
+    if not os.path.exists(filename):
+        print(f"Downloading {url} to {filename}")
+        import requests
+
+        res = requests.get(url)
+        with open(filename, "wb") as of:
+            of.write(res.content)
+    return filename
 
 
 def filter_name(name, verbose=False):
