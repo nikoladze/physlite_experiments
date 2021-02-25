@@ -329,17 +329,13 @@ def test_flat_root(tmpdir):
 
 if __name__ == "__main__":
 
-    pass
-
-    # branch_dict = read_physlite_flat("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
-    # # for nentries in [1250, 2500, 5000, 10000]:
-    # #     output_file = f"physlite_flat_lz4_{nentries}.root"
-    # #     print(f"Writing {output_file}")
-    # #     write_branch_dict_root_flat(branch_dict, output_file, entry_stop=nentries, lz4=True)
-    # write_branch_dict_root_flat(branch_dict, "test.root", entry_stop=10)
-
-    branch_dict = read_physlite_flat(example_file())
-    write_branch_dict_root_flat(branch_dict, "test.root")
-    tree = uproot.open("test.root:tree")
-    arrays = {k: v.array() for k, v in tree.iteritems()}
-    arrays_unflat = unflatten(arrays)
+    branch_dict = read_physlite_flat("user.nihartma.22884623.EXT0._000001.DAOD_PHYSLITE.test.pool.root")
+    for nentries in [1250, 2500, 5000, 10000]:
+        for lz4 in [True, False]:
+            if lz4:
+                postfix = "lz4_"
+            else:
+                postfix = ""
+            output_file = f"physlite_flat_{postfix}{nentries}.root"
+            print(f"Writing {output_file}")
+            write_branch_dict_root_flat(branch_dict, output_file, entry_stop=nentries, lz4=lz4)
