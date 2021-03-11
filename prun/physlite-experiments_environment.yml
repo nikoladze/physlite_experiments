@@ -1,0 +1,13 @@
+name: physlite-experiments-pack
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - xrootd
+  - pip:
+    - awkward>=1
+    - numba
+    - numpy
+    - pyarrow>=3
+    - uproot>=4
