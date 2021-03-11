@@ -3,7 +3,8 @@ from setuptools import setup
 setup(
     name="physlite_experiments",
     version="0.0",
-    packages=["physlite_experiments"],
+    packages=["physlite_experiments", "physlite_experiments.scripts"],
+    package_data={"physlite_experiments" : ["data/*"]},
     install_requires=[
         "numpy",
         "h5py",
