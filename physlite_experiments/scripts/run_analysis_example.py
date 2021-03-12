@@ -9,14 +9,7 @@ from physlite_experiments.physlite_events import (
     physlite_events, get_lazy_form, get_branch_forms, Factory, LazyGet
 )
 from physlite_experiments.analysis_example import get_obj_sel
-
-
-def subdivide(l, n):
-    """
-    get the number of entries for subdividing l ntries into n approximately
-    same sized chunks (like in numpy.array_split)
-    """
-    return [l // n + 1] * (l % n) + [l // n] * (n - l % n)
+from physlite_experiments.utils import subdivide
 
 
 def run(filename, max_chunksize=10000):

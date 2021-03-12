@@ -80,3 +80,11 @@ def zip_physlite(array_dict):
             regrouped.pop(k)
     regrouped["TrigMatchedObjects"] = trig_matched_objects
     return ak.zip(regrouped, depth_limit=1)
+
+
+def subdivide(l, n):
+    """
+    get the number of entries for subdividing l ntries into n approximately
+    same sized chunks (like in numpy.array_split)
+    """
+    return [l // n + 1] * (l % n) + [l // n] * (n - l % n)

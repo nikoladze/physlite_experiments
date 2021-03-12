@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
+import math
 import awkward as ak
 import uproot
-from physlite_experiments.utils import filter_name, zip_physlite
+from physlite_experiments.utils import filter_name, zip_physlite, subdivide
 
 # this hack won't be needed anymore when uproot uses awkward forth
 # see https://github.com/scikit-hep/awkward-1.0/pull/661
@@ -27,12 +28,16 @@ def to_parquet(
         output_parquet,
         zip=False,
         verbose=False,
+        max_partition_size=None,
         **kwargs
 ):
     entry_stop = kwargs.pop("entry_stop", None)
     ar = to_ak(input_daod, zip=zip, verbose=verbose)
     if entry_stop is not None:
         ar = ar[:entry_stop]
+    if max_partition_size is not None and len(ar) > max_partition_size:
+        npartitions = math.ceil(len(ar) / max_partition_size)
+        ar = ak.repartition(ar, subdivide(len(ar), npartitions))
     ak.to_parquet(ar, output_parquet, **kwargs)
 
 
@@ -45,6 +50,7 @@ if __name__ == "__main__":
     parser.add_argument("--zip", action="store_true", help="zip Collections (e.g. group Electrons, Muons, Jets)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Print all skipped branches")
     parser.add_argument("--entry-stop", help="only convert up to this number of entries", type=int)
+    parser.add_argument("--max-partition-size", help="subdivide into row groups of maximum this size", type=int)
     args = parser.parse_args()
 
     to_parquet(**vars(args))
