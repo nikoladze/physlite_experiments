@@ -5,3 +5,6 @@
 *.egg-info
 __pycache__
 .ipynb_checkpoints
+prun/workdir/conda-env
+prun/workdir/xrootd-site-packages
+prun/*.tgz
