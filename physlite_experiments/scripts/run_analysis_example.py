@@ -65,10 +65,14 @@ def run(filename, max_chunksize=10000):
 if __name__ == "__main__":
 
     import argparse
+    import time
 
     parser = argparse.ArgumentParser()
     parser.add_argument("input_files")
     args = parser.parse_args()
 
     for filename in args.input_files.split(","):
+        print("Processing", filename)
+        start = time.time()
         print(run(filename, max_chunksize=50000))
+        print(f"Took {time.time() - start:.2f} seconds")
