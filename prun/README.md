@@ -3,22 +3,25 @@
 ## create conda environment tarball
 
 ```
-conda env create -f physlite-experiments_environment.yml -p $(pwd)/conda-env
+conda env create -f physlite-experiments_environment.yml -p $(pwd)/workdir/conda-env
 ```
 
 ## update package in conda env before submitting
 
 ```
-conda activate $(pwd)/conda-env
+conda activate $(pwd)/workdir/conda-env
 export PYTHONNOUSERSITE=1
 python -m pip install ../
-tar cfz conda-env.tgz conda-env
-mv conda-env.tgz workdir
+```
+
+## create tarball
+
+```
+pushd workdir && tar cfz ../tarball.tgz * && popd
 ```
 
 ## submit
 
 ```
-cd workdir
 source submit.sh
 ```

@@ -1,9 +1,8 @@
 #!/bin/bash
 
-tar xfz conda-env.tgz
-
 export PATH=$(pwd)/conda-env/bin:$PATH
 unset PYTHONPATH
+export PYTHONPATH=$(pwd)/xrootd-site-packages
 
 type python
 
