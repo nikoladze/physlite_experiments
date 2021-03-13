@@ -237,7 +237,11 @@ def from_parquet(parquet_file):
         parquet_file, behavior={"__events__": events_container}, lazy=True
     )
     events_container[0] = weakref.ref(events)
-    events["Electrons"] = ak.with_name(events.Electrons, "xAODElectron")
+    for collection, name in behavior_dict.items():
+        if not collection in events.fields:
+            continue
+        events[collection] = ak.with_name(events[collection], name)
+    events.branch_names = get_branch_names()
     return events
 
 
