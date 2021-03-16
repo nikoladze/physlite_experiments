@@ -22,5 +22,24 @@ Some notable scripts, modules and notebooks:
 * [to_parquet.py](physlite_experiments/scripts/to_parquet.py): Script to convert DAOD_PHYSLITE Aux branches to parquet
 * [convert_to_basic_root.py](physlite_experiments/scripts/convert_to_basic_root.py): Scripts to convert DAOD_PHYSLITE Aux branches into more basic ROOT formats (e.g. without any custom classes or with only one level of jagged plain arrays)
 * [proper_xrdfile.py](physlite_experiments/proper_xrdfile.py): Example for reading a parquet file via xrootd
-* [prun](prun): Example script for submission to PanDA
+* [prun](prun): Example script for submission to PanDA (using a conda environment tarball)
+
+## Submit to panda via container on cvmfs
+
+Build and push new container image
+
+```
+docker build -t nikolaihartmann/physlite-experiments:latest .
+docker image push nikolaihartmann/physlite-experiments:latest
+```
+
+Example for prun submission
+
+```
+prun --containerImage /cvmfs/unpacked.cern.ch/registry.hub.docker.com/nikolaihartmann/physlite-experiments:latest \
+     --exec="python -m physlite_experiments.scripts.run_analysis_example %IN" \
+     --inDS="<input-dataset-name>" \
+     --outDS="<output-dataset-name>"
+```
+
 
