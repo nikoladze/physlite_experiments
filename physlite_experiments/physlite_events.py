@@ -231,10 +231,10 @@ def physlite_events(uproot_tree, **kwargs):
     return Factory.from_tree(uproot_tree, **kwargs).events
 
 
-def from_parquet(parquet_file):
+def from_parquet(parquet_file, **kwargs):
     events_container = [0]
     events = ak.from_parquet(
-        parquet_file, behavior={"__events__": events_container}, lazy=True
+        parquet_file, behavior={"__events__": events_container}, lazy=True, **kwargs
     )
     events_container[0] = weakref.ref(events)
     for collection, name in behavior_dict.items():

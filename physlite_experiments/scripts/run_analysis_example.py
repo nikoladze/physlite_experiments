@@ -6,7 +6,7 @@ import math
 import awkward as ak
 
 from physlite_experiments.physlite_events import (
-    physlite_events, get_lazy_form, get_branch_forms, Factory, LazyGet
+    physlite_events, get_lazy_form, get_branch_forms, Factory, LazyGet, from_parquet
 )
 from physlite_experiments.analysis_example import get_obj_sel
 from physlite_experiments.utils import subdivide
@@ -55,6 +55,33 @@ def run(filename, max_chunksize=10000):
     return output, nevents
 
 
+def run_parquet(filename):
+    import pyarrow.parquet as pq
+
+    output = {
+        collection: {
+            flag : 0
+            for flag in ["baseline", "passOR", "signal"]
+        } for collection in ["Electrons", "Muons", "Jets"]
+    }
+    nevents = 0
+    f = pq.ParquetFile(filename)
+    for row_group in range(f.num_row_groups):
+        print("Processing row group", row_group)
+        events = from_parquet(filename, row_groups=row_group)
+        events_decorated = get_obj_sel(events)
+        for collection in output:
+            for flag in output[collection]:
+                output[collection][flag] += ak.count_nonzero(
+                    events_decorated[collection][flag]
+                )
+        print("Contained", len(events_decorated), "events")
+        nevents += len(events_decorated)
+
+    return output, nevents
+
+
+
 if __name__ == "__main__":
 
     import argparse
@@ -62,10 +89,14 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("input_files")
+    parser.add_argument("--max-chunksize", help="only for root files", type=int)
     args = parser.parse_args()
 
     for filename in args.input_files.split(","):
         print("Processing", filename)
         start = time.time()
-        print(run(filename, max_chunksize=50000))
+        if filename.endswith(".parquet"):
+            print(run_parquet(filename))
+        else:
+            print(run(filename, max_chunksize=args.max_chunksize))
         print(f"Took {time.time() - start:.2f} seconds")
