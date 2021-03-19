@@ -219,7 +219,11 @@ class Factory:
         form = get_lazy_form(get_branch_forms(uproot_tree))
         form = json.dumps(form)
         container = LazyGet(
-            uproot_tree, verbose=verbose, entry_start=entry_start, entry_stop=entry_stop
+            uproot_tree,
+            verbose=verbose,
+            entry_start=entry_start,
+            entry_stop=entry_stop,
+            cache={},
         )
         start = entry_start or 0
         stop = entry_stop or uproot_tree.num_entries
