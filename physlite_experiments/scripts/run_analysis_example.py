@@ -22,7 +22,6 @@ def run(filename, max_chunksize=10000):
     nevents = 0
     with uproot.open(
         f"{filename}:CollectionTree",
-        array_cache=None,
         # vector reads are currently memory leaking
         # see https://github.com/xrootd/xrootd/issues/1400
         # probably not much an issue for this script
@@ -39,8 +38,10 @@ def run(filename, max_chunksize=10000):
         for num_entries in subdivide(tree.num_entries, n_chunks):
             print("Processing", num_entries, "entries")
             entry_stop = entry_start + num_entries
+            cache = {}
             container = LazyGet(
-                tree, entry_start=entry_start, entry_stop=entry_stop
+                tree, entry_start=entry_start, entry_stop=entry_stop,
+                cache=cache
             )
             factory = Factory(form, entry_stop - entry_start, container)
             events = factory.events
