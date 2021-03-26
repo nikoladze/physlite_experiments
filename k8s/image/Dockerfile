@@ -51,6 +51,6 @@ ENV PYTHONPATH /home/jovyan/.local/lib/python3.6/site-packages:$PYTHONPATH
 
 COPY --chown=jovyan . physlite-experiments
 RUN cd physlite-experiments; pip3 install --user --editable .
-COPY k8s/image/dask_test_k8s.ipynb dask_test_k8s.ipynb
+COPY --chown=jovyan k8s/image/dask_test_k8s.ipynb dask_test_k8s.ipynb
 
 CMD ["jupyter", "lab", "--ip", "0.0.0.0"]
