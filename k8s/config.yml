@@ -1,0 +1,29 @@
+worker:
+  replicas: 3
+  image:
+    repository: lukasheinrich/atlas100daskworker
+    tag: latest
+    pullPolicy: Always
+  resources:
+    limits:
+      cpu: 1
+      memory: 3.5G
+    requests:
+      cpu: 1
+      memory: 3.5G
+  env:
+    - name: EXTRA_PIP_PACKAGES
+      value: s3fs dask-ml uproot awkward --upgrade
+
+# We want to keep the same packages on the worker and jupyter environments
+jupyter:
+  enabled: true
+  image:
+    repository: lukasheinrich/atlas100daskworker
+    tag: latest
+    pullPolicy: Always
+  env:
+    - name: EXTRA_PIP_PACKAGES
+      value: s3fs dask-ml uproot awkward --upgrade
+    - name: JUPYTER_TOKEN
+      value: dask
