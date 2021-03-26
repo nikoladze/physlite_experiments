@@ -23,6 +23,7 @@ Some notable scripts, modules and notebooks:
 * [convert_to_basic_root.py](physlite_experiments/scripts/convert_to_basic_root.py): Scripts to convert DAOD_PHYSLITE Aux branches into more basic ROOT formats (e.g. without any custom classes or with only one level of jagged plain arrays)
 * [proper_xrdfile.py](physlite_experiments/proper_xrdfile.py): Example for reading a parquet file via xrootd
 * [prun](prun): Example script for submission to PanDA (using a conda environment tarball)
+* [k8s](k8s): Setup for running the analysis example on a kubernetes-deployed dask cluster
 
 ## Submit to panda via container on cvmfs
 
