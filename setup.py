@@ -13,6 +13,7 @@ setup(
         "awkward>=1.1.0rc1",
         "pyarrow>=3",
         "coffea>=0.7",
+        "aiohttp",
     ],
     python_requires=">=3.5",
     author="Nikolai Hartmann",

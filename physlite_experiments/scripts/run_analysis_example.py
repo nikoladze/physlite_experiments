@@ -12,7 +12,7 @@ from physlite_experiments.analysis_example import get_obj_sel
 from physlite_experiments.utils import subdivide
 
 
-def run(filename, max_chunksize=10000):
+def run(filename, max_chunksize=10000, http_handler=uproot.MultithreadedHTTPSource):
     output = {
         collection: {
             flag : 0
@@ -22,12 +22,8 @@ def run(filename, max_chunksize=10000):
     nevents = 0
     with uproot.open(
         f"{filename}:CollectionTree",
-        # vector reads are currently memory leaking
-        # see https://github.com/xrootd/xrootd/issues/1400
-        # probably not much an issue for this script
-        # but in case this becomes problematic fall back to MultithreadedXRootDSource for now
-        #xrootd_handler=uproot.MultithreadedXRootDSource
-        xrootd_handler=uproot.XRootDSource
+        xrootd_handler=uproot.XRootDSource,
+        http_handler=http_handler,
     ) as tree:
         if max_chunksize is not None and tree.num_entries > max_chunksize:
             n_chunks = math.ceil(tree.num_entries / max_chunksize)
@@ -90,14 +86,32 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("input_files")
-    parser.add_argument("--max-chunksize", help="only for root files", type=int)
-    args = parser.parse_args()
+    parser.add_argument("--max-chunksize", help="only for root files - process this number of events at once", type=int)
+    parser.add_argument("--multirange", help="use multirange requests for HTTP", default=False, action="store_true")
+    parser.add_argument("--aiohttp", help="use experimental AIOHTTPSource for HTTP", default=False, action="store_true")
+    parser.add_argument("--aio-num-connections", help="use this number of TCP connections when running with aiohttp", default=10, type=int)
+    opts = parser.parse_args()
 
-    for filename in args.input_files.split(","):
+    if opts.aiohttp:
+        from physlite_experiments.io import AIOHTTPSource as AIOHTTPSourceBase
+
+        class AIOHTTPSource(AIOHTTPSourceBase):
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, tcp_connection_limit=opts.aio_num_connections, **kwargs)
+
+        http_handler = AIOHTTPSource
+    elif opts.multirange:
+        http_handler = uproot.HTTPSource
+    else:
+        http_handler = uproot.MultithreadedHTTPSource
+
+    # The replacement for &amp; is a workaround for some http urls in panda
+    for filename in opts.input_files.replace(r"&amp;", r"&").split(","):
         print("Processing", filename)
         start = time.time()
         if filename.endswith(".parquet"):
             print(run_parquet(filename))
         else:
-            print(run(filename, max_chunksize=args.max_chunksize))
+            print(run(filename, max_chunksize=opts.max_chunksize, http_handler=http_handler))
         print(f"Took {time.time() - start:.2f} seconds")
