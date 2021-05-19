@@ -464,6 +464,23 @@ def tree_arrays(tree, filter_name=None, filter_branch=None):
     return array_dict
 
 
+def patch_nanoevents(verbose=False):
+    """
+    Patch the `extract_column` method of `UprootSourceMapping` in
+    `coffea.nanoevents` to make use of the deserialization hacks
+    """
+    from coffea.nanoevents.mapping import UprootSourceMapping
+    from coffea.nanoevents.schemas import PHYSLITESchema
+
+    def extract_column(self, columnhandle, start, stop):
+        if verbose:
+            print("extracting", columnhandle)
+        return branch_to_array(columnhandle, entry_start=start, entry_stop=stop)
+
+    UprootSourceMapping.extract_column = extract_column
+    PHYSLITESchema._hack_for_elementlink_int64 = False
+
+
 def test_vector_vector_int():
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisJetsAuxDyn.NumTrkPt500"]
