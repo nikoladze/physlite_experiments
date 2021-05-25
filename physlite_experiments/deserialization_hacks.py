@@ -5,8 +5,10 @@ import os
 import numba
 import numpy as np
 import awkward as ak
+import awkward.forth
 import queue
 from physlite_experiments.utils import example_file
+import pytest
 
 __all__ = [
     "example_file",
@@ -33,8 +35,16 @@ def parse_vector_header(d, pos):
     return pos + 10, num_entries
 
 
+def _read_vector_vector(basket_data, num_entries, use_forth=False, **kwargs):
+    if not use_forth:
+        kwargs.pop("byte_offsets", None)
+        return _read_vector_vector_numba(basket_data.tobytes(), num_entries, **kwargs)
+    else:
+        return _read_vector_vector_forth(np.array(basket_data), num_entries, **kwargs)
+
+
 @numba.njit(cache=True)
-def _read_vector_vector(
+def _read_vector_vector_numba(
     basket_data, num_entries, data_size=4, data_header_size=0, num_entries_size=4
 ):
     """
@@ -89,6 +99,68 @@ def _read_vector_vector(
                     pos += 1
 
     return offsets_lvl1, offsets_lvl2[:i_offset_lvl2], actual_data[:i_data]
+
+
+def _read_vector_vector_forth(
+        basket_data,
+        num_entries,
+        byte_offsets,
+        data_size=4,
+        data_header_size=0,
+        num_entries_size=4
+):
+    forth = [
+        "input data",
+        "input byte_offsets",
+        "output offsets1 int64",
+        "output offsets0 int64",
+        "output content int8",
+        "",
+        "0 offsets1 <- stack",
+        "0 offsets0 <- stack",
+        "",
+        "begin",
+        "  byte_offsets i-> stack",
+        "  6 + data seek",
+        "  data !i-> stack"
+    ]
+    forth += [
+        "  dup offsets1 +<- stack",
+        "  0 do",
+    ]
+    if num_entries_size == 4:
+        forth.append("data !i-> stack")
+    elif num_entries_size == 1:
+        forth.append("data !b-> stack")
+    else:
+        raise NotImplementedError(
+            f"No implementation for `num_entries_size` == {num_entries_size}"
+        )
+    forth += [
+        "    dup offsets0 +<- stack",
+        "    0 do",
+    ]
+    if data_header_size != 0:
+        forth.append(f"{data_header_size} data skip")
+    forth += [
+        f"     {data_size} data #!b-> content",
+        "    loop",
+        "  loop",
+        "again",
+    ]
+    machine = awkward.forth.ForthMachine32("\n".join(forth))
+    machine.run(
+        {"data": basket_data, "byte_offsets": byte_offsets},
+        raise_read_beyond=False,
+        raise_seek_beyond=False,
+    )
+    return [
+        np.asarray(i) for i in [
+            machine.output_Index64("offsets1"),
+            machine.output_Index64("offsets0"),
+            machine.output_NumpyArray("content"),
+        ]
+    ]
 
 
 @numba.njit(cache=True)
@@ -230,17 +302,20 @@ def _branch_to_array_vector_vector(
     num_entries_size=4,
     entry_start=None,
     entry_stop=None,
+    use_forth=False,
 ):
     offsets_lvl1, offsets_lvl2, data = [], [], []
     baskets = _get_baskets(branch, entry_start=entry_start, entry_stop=entry_stop)
     for i in sorted(baskets):
         basket = baskets[i]
         offsets_lvl1_i, offsets_lvl2_i, data_i = _read_vector_vector(
-            basket.data.tobytes(),
+            basket.data,
             basket.num_entries,
+            byte_offsets=basket.byte_offsets,
             data_size=data_size,
             data_header_size=data_header_size,
             num_entries_size=num_entries_size,
+            use_forth=use_forth
         )
         data.append(data_i)
         if len(offsets_lvl1) == 0:
@@ -481,38 +556,43 @@ def patch_nanoevents(verbose=False):
     PHYSLITESchema._hack_for_elementlink_int64 = False
 
 
-def test_vector_vector_int():
+@pytest.mark.parametrize("use_forth", [True, False])
+def test_vector_vector_int(use_forth):
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisJetsAuxDyn.NumTrkPt500"]
-        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True, use_forth=use_forth))
 
 
-def test_vector_vector_double():
+@pytest.mark.parametrize("use_forth", [True, False])
+def test_vector_vector_double(use_forth):
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.trkpx"]
-        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True, use_forth=use_forth))
 
 
-def test_vector_vector_float():
+@pytest.mark.parametrize("use_forth", [True, False])
+def test_vector_vector_float(use_forth):
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisJetsAuxDyn.TrackWidthPt1000"]
-        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True, use_forth=use_forth))
 
 
-def test_vector_vector_elementlink():
+@pytest.mark.parametrize("use_forth", [True, False])
+def test_vector_vector_elementlink(use_forth):
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisElectronsAuxDyn.trackParticleLinks"]
         array1 = branch.array()
-        array2 = branch_to_array(branch, force_custom=True)
+        array2 = branch_to_array(branch, force_custom=True, use_forth=use_forth)
         assert set(array1.fields) == set(array2.fields)
         for field in array1.fields:
             assert ak.all(array1[field] == array2[field])
 
 
-def test_vector_string():
+@pytest.mark.parametrize("use_forth", [True, False])
+def test_vector_string(use_forth):
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["EventInfoAux.streamTagNames"]
-        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True, use_forth=use_forth))
 
 
 def test_vector_vector_vector():
@@ -527,7 +607,8 @@ def test_vector_vector_vector2():
         assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
 
 
-def test_start_stop():
+@pytest.mark.parametrize("use_forth", [True, False])
+def test_start_stop(use_forth):
     with uproot4.open(example_file()) as f:
         branch = f["CollectionTree"]["AnalysisElectronsAuxDyn.trackParticleLinks"]
         rnd = (
@@ -542,6 +623,7 @@ def test_start_stop():
                 force_custom=True,
                 entry_start=start,
                 entry_stop=stop,
+                use_forth=use_forth
             )
             for field in array1.fields:
                 assert ak.all(array1[field] == array2[field])
