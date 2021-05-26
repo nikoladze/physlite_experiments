@@ -138,13 +138,20 @@ def _read_vector_vector_forth(
         )
     forth += [
         "    dup offsets0 +<- stack",
-        "    0 do",
     ]
-    if data_header_size != 0:
-        forth.append(f"{data_header_size} data skip")
+    if data_header_size == 0:
+        forth += [
+            f"{data_size} *",
+            "data #!b-> content"
+        ]
+    else:
+        forth += [
+            " 0 do",
+            f"  {data_header_size} data skip"
+            f"  {data_size} data #!b-> content",
+            " loop",
+        ]
     forth += [
-        f"     {data_size} data #!b-> content",
-        "    loop",
         "  loop",
         "again",
     ]
