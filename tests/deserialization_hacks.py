@@ -45,16 +45,18 @@ def test_vector_string(use_forth):
         assert ak.all(branch.array() == branch_to_array(branch, force_custom=True, use_forth=use_forth))
 
 
-def test_vector_vector_vector():
+@pytest.mark.parametrize("use_forth", [True, False])
+def test_vector_vector_vector(use_forth):
     with uproot.open(example_file()) as f:
         branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.overlapIndices"]
-        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True, use_forth=use_forth))
 
 
-def test_vector_vector_vector2():
+@pytest.mark.parametrize("use_forth", [True, False])
+def test_vector_vector_vector2(use_forth):
     with uproot.open(example_file()) as f:
         branch = f["CollectionTree"]["METAssoc_AnalysisMETAux.overlapTypes"]
-        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True))
+        assert ak.all(branch.array() == branch_to_array(branch, force_custom=True, use_forth=use_forth))
 
 
 @pytest.mark.parametrize("use_forth", [True, False])

@@ -37,7 +37,7 @@ def _read_vector_vector(basket_data, num_entries, use_forth=False, **kwargs):
         kwargs.pop("byte_offsets", None)
         return _read_vector_vector_numba(basket_data.tobytes(), num_entries, **kwargs)
     else:
-        return _read_vector_vector_forth(np.array(basket_data), num_entries, **kwargs)
+        return _read_nested_vector_forth(np.array(basket_data), num_entries, ndim=2, **kwargs)
 
 
 @numba.njit(cache=True)
@@ -98,44 +98,42 @@ def _read_vector_vector_numba(
     return offsets_lvl1, offsets_lvl2[:i_offset_lvl2], actual_data[:i_data]
 
 
-def _read_vector_vector_forth(
-        basket_data,
-        num_entries,
-        byte_offsets,
-        data_size=4,
-        data_header_size=0,
-        num_entries_size=4
+def _read_nested_vector_forth(
+    basket_data,
+    num_entries,
+    byte_offsets,
+    data_size=4,
+    data_header_size=0,
+    num_entries_size=4,
+    ndim=2,
 ):
     forth = [
         "input data",
         "input byte_offsets",
-        "output offsets1 int64",
-        "output offsets0 int64",
-        "output content int8",
-        "",
-        "0 offsets1 <- stack",
-        "0 offsets0 <- stack",
-        "",
+    ]
+    for i in range(ndim):
+        forth.append(f"output offsets{i} int64")
+    forth.append("output content int8")
+    for i in range(ndim):
+        forth.append(f"0 offsets{i} <- stack")
+    forth += [
         "begin",
         "  byte_offsets i-> stack",
         "  6 + data seek",
         "  data !i-> stack"
+        "  dup offsets0 +<- stack",
     ]
-    forth += [
-        "  dup offsets1 +<- stack",
-        "  0 do",
-    ]
-    if num_entries_size == 4:
-        forth.append("data !i-> stack")
-    elif num_entries_size == 1:
-        forth.append("data !b-> stack")
-    else:
-        raise NotImplementedError(
-            f"No implementation for `num_entries_size` == {num_entries_size}"
-        )
-    forth += [
-        "    dup offsets0 +<- stack",
-    ]
+    for i in range(1, ndim):
+        forth.append("0 do")
+        if num_entries_size == 4:
+            forth.append("data !i-> stack")
+        elif num_entries_size == 1:
+            forth.append("data !b-> stack")
+        else:
+            raise NotImplementedError(
+                f"No implementation for `num_entries_size` == {num_entries_size}"
+            )
+        forth.append(f"dup offsets{i} +<- stack")
     if data_header_size == 0:
         forth += [
             f"{data_size} *",
@@ -148,10 +146,9 @@ def _read_vector_vector_forth(
             f"  {data_size} data #!b-> content",
             " loop",
         ]
-    forth += [
-        "  loop",
-        "again",
-    ]
+    for i in range(ndim - 1):
+        forth.append("loop")
+    forth.append("again")
     machine = awkward.forth.ForthMachine32("\n".join(forth))
     machine.run(
         {"data": basket_data, "byte_offsets": byte_offsets},
@@ -160,15 +157,25 @@ def _read_vector_vector_forth(
     )
     return [
         np.asarray(i) for i in [
-            machine.output_Index64("offsets1"),
-            machine.output_Index64("offsets0"),
+            machine.output_Index64(f"offsets{j}")
+            for j in range(ndim)
+        ] + [
             machine.output_NumpyArray("content"),
         ]
     ]
 
 
+def _read_vector_vector_vector(basket_data, num_entries, use_forth=False, **kwargs):
+    if not use_forth:
+        kwargs.pop("byte_offsets", None)
+        return _read_vector_vector_vector_numba(basket_data.tobytes(), num_entries, **kwargs)
+    else:
+        return _read_nested_vector_forth(np.array(basket_data), num_entries, ndim=3, **kwargs)
+    pass
+
+
 @numba.njit(cache=True)
-def _read_vector_vector_vector(
+def _read_vector_vector_vector_numba(
     basket_data, num_entries, data_size=4, data_header_size=0, num_entries_size=4
 ):
     """
@@ -370,7 +377,7 @@ def _branch_to_array_vector_vector(
 
 
 def _branch_to_array_vector_vector_vector(
-    branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4
+    branch, dtype=np.dtype(">i4"), data_size=4, data_header_size=0, num_entries_size=4, use_forth=False
 ):
     offsets_lvl1, offsets_lvl2, offsets_lvl3, data = [], [], [], []
     baskets = _get_baskets(branch)
@@ -382,11 +389,13 @@ def _branch_to_array_vector_vector_vector(
             offsets_lvl3_i,
             data_i,
         ) = _read_vector_vector_vector(
-            basket.data.tobytes(),
+            basket.data,
             basket.num_entries,
             data_size=data_size,
             data_header_size=data_header_size,
             num_entries_size=num_entries_size,
+            byte_offsets=basket.byte_offsets,
+            use_forth=use_forth,
         )
         data.append(data_i)
         if len(offsets_lvl1) == 0:
@@ -513,10 +522,11 @@ def branch_to_array(branch, force_custom=False, **kwargs):
         raise TypeError(
             f"No custom deserialization for interpretation {branch.interpretation}"
         )
+    kwargs.pop("use_forth", None)
     return branch.array(**kwargs)
 
 
-def tree_arrays(tree, filter_name=None, filter_branch=None):
+def tree_arrays(tree, filter_name=None, filter_branch=None, use_forth=False):
     """
     Read all branches from a tree into arrays (using custom deserialization if
     possible). Optionally takes a filter function that takes a branch name and returns
@@ -536,7 +546,7 @@ def tree_arrays(tree, filter_name=None, filter_branch=None):
             return
         if filter_branch is not None and not filter_branch(branch):
             return
-        array_dict[branch.name] = branch_to_array(branch)
+        array_dict[branch.name] = branch_to_array(branch, use_forth=use_forth)
 
     fill_dict(tree)
 
