@@ -132,18 +132,10 @@ def _generate_forth_machine(*args):
                 f"No implementation for `num_entries_size` == {num_entries_size}"
             )
         forth.append(f"dup offsets{i} +<- stack")
-    if data_header_size == 0:
-        forth += [
-            f"{data_size} *",
-            "data #!b-> content"
-        ]
-    else:
-        forth += [
-            " 0 do",
-            f"  {data_header_size} data skip"
-            f"  {data_size} data #!b-> content",
-            " loop",
-        ]
+    forth += [
+        f"{data_size + data_header_size} *",
+        "data #!b-> content"
+    ]
     for i in range(ndim - 1):
         forth.append("loop")
     forth.append("again")
@@ -169,6 +161,11 @@ def _read_nested_vector_forth(
         raise_seek_beyond=False,
     )
     content = machine.output_NumpyArray("content")
+    if data_header_size != 0:
+        content = np.asarray(content)
+        content = content.view(
+            [("header", f">V{data_header_size}"), ("data", f">V{data_size}")]
+        )["data"]
     return [
         np.asarray(i) for i in [
             machine.output_Index64(f"offsets{j}")
