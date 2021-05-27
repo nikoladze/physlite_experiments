@@ -98,15 +98,13 @@ def _read_vector_vector_numba(
     return offsets_lvl1, offsets_lvl2[:i_offset_lvl2], actual_data[:i_data]
 
 
-def _read_nested_vector_forth(
-    basket_data,
-    num_entries,
-    byte_offsets,
-    data_size=4,
-    data_header_size=0,
-    num_entries_size=4,
-    ndim=2,
-):
+_forth_machine_cache = {}
+
+def _generate_forth_machine(*args):
+    data_size, data_header_size, num_entries_size, ndim = args
+    if args in _forth_machine_cache:
+        return _forth_machine_cache[args]
+
     forth = [
         "input data",
         "input byte_offsets",
@@ -149,19 +147,33 @@ def _read_nested_vector_forth(
     for i in range(ndim - 1):
         forth.append("loop")
     forth.append("again")
-    machine = awkward.forth.ForthMachine32("\n".join(forth))
+    forth = "\n".join(forth)
+    machine = awkward.forth.ForthMachine32(forth)
+    _forth_machine_cache[args] = machine
+    return machine
+
+
+def _read_nested_vector_forth(
+    basket_data,
+    num_entries,
+    byte_offsets,
+    data_size=4,
+    data_header_size=0,
+    num_entries_size=4,
+    ndim=2,
+):
+    machine = _generate_forth_machine(data_size, data_header_size, num_entries_size, ndim)
     machine.run(
         {"data": basket_data, "byte_offsets": byte_offsets},
         raise_read_beyond=False,
         raise_seek_beyond=False,
     )
+    content = machine.output_NumpyArray("content")
     return [
         np.asarray(i) for i in [
             machine.output_Index64(f"offsets{j}")
             for j in range(ndim)
-        ] + [
-            machine.output_NumpyArray("content"),
-        ]
+        ] + [content]
     ]
 
 
