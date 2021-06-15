@@ -236,6 +236,12 @@ def physlite_events(uproot_tree, **kwargs):
 
 
 def from_parquet(parquet_file, **kwargs):
+    import fsspec
+
+    of = None
+    if parquet_file.startswith("http"):
+        of = fsspec.open(parquet_file, "rb")
+        parquet_file = of.open()
     events_container = [0]
     events = ak.from_parquet(
         parquet_file, behavior={"__events__": events_container}, lazy=True, **kwargs

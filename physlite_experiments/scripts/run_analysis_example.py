@@ -54,6 +54,7 @@ def run(filename, max_chunksize=10000, http_handler=uproot.MultithreadedHTTPSour
 
 def run_parquet(filename):
     import pyarrow.parquet as pq
+    import fsspec
 
     output = {
         collection: {
@@ -62,7 +63,11 @@ def run_parquet(filename):
         } for collection in ["Electrons", "Muons", "Jets"]
     }
     nevents = 0
-    f = pq.ParquetFile(filename)
+    if filename.startswith("http"):
+        with fsspec.open(filename, "rb") as of:
+            f = pq.ParquetFile(of)
+    else:
+        f = pq.ParquetFile(filename)
     for row_group in range(f.num_row_groups):
         print("Processing row group", row_group)
         events = from_parquet(filename, row_groups=row_group)
