@@ -6,7 +6,7 @@ import math
 import awkward as ak
 
 from physlite_experiments.physlite_events import (
-    physlite_events, get_lazy_form, get_branch_forms, Factory, LazyGet, from_parquet
+    physlite_events, get_lazy_form, get_branch_forms, Factory, LazyGet
 )
 from physlite_experiments.analysis_example import get_obj_sel
 from physlite_experiments.utils import subdivide
@@ -64,13 +64,15 @@ def run_parquet(filename):
     }
     nevents = 0
     if filename.startswith("http"):
-        with fsspec.open(filename, "rb") as of:
+        with fsspec.open(filename, "rb", cache_type="none") as of:
             f = pq.ParquetFile(of)
+            parquet_file = of
     else:
         f = pq.ParquetFile(filename)
+        parquet_file = filename
     for row_group in range(f.num_row_groups):
         print("Processing row group", row_group)
-        events = from_parquet(filename, row_groups=row_group)
+        events = Factory.from_parquet(parquet_file, row_groups=row_group).events
         events_decorated = get_obj_sel(events)
         for collection in output:
             for flag in output[collection]:

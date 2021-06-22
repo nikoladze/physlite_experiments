@@ -150,6 +150,67 @@ def get_lazy_form(branch_forms):
     return form
 
 
+def find_first_column(form, form_key=None):
+    """
+    Find first leave column in a form (used to define a column for loading offsets)
+    """
+    if form_key is None:
+        form_key = []
+    if form["class"] == "VirtualArray":
+        return find_first_column(form["form"], form_key)
+    elif form["class"] == "RecordArray":
+        for key in form["contents"]:
+            if not form["contents"][key]["class"].startswith("ListOffsetArray"):
+                # let's use a not-further-nested column if possible
+                return find_first_column(form["contents"][key], form_key + [key])
+        # otherwise just use what we got
+        return find_first_column(form["contents"][key], form_key + [key])
+    elif form["class"].startswith("ListOffsetArray"):
+        return find_first_column(form["content"], form_key)
+    elif form["class"] == "NumpyArray":
+        return form_key
+    else:
+        raise ValueError(f"Can't deal with {form['class']}")
+
+
+def recreate_form(form, form_key=None, level=0):
+    """
+    Recreate form, e.g. from `ak.from_parquet` with `lazy=True` to include record names
+
+    used for to lazy-load from parquet
+    """
+    if form_key is None:
+        form_key = []
+    if form["class"] == "VirtualArray":
+        return recreate_form(form["form"], form_key=form_key, level=level)
+    form = deepcopy(form)
+    if form["class"].startswith("ListOffsetArray"):
+        level += 1
+        form["content"] = recreate_form(
+            form["content"],
+            form_key=form_key,
+            level=level,
+        )
+        form["form_key"] = (
+            ":".join(form_key + find_first_column(form["content"]))
+            + "".join(["%offsets"] * level)
+        )
+    elif form["class"] == "RecordArray":
+        if len(form_key) > 0 and form_key[-1] in behavior_dict:
+            form["parameters"]["__record__"] = behavior_dict[form_key[-1]]
+        contents = {}
+        for key in form["contents"]:
+            contents[key] = recreate_form(
+                form["contents"][key],
+                form_key=form_key + [key],
+                level=level
+            )
+        form["contents"] = contents
+    elif form["class"] == "NumpyArray":
+        form["form_key"] = ":".join(form_key)
+    return form
+
+
 class LazyGet:
     def __init__(
         self,
@@ -230,30 +291,37 @@ class Factory:
         length = stop - start
         return cls(form, length, container)
 
+    @classmethod
+    def from_parquet(cls, parquet_file, **kwargs):
+        lazy = ak.from_parquet(parquet_file, lazy=True, **kwargs)
+        form = recreate_form(json.loads(lazy.layout.form.tojson()))
+
+        class Mapping:
+            def __getitem__(self, key):
+                tokens = key.split("-")
+                part = tokens[0]
+                what = tokens[-1]
+                array_key = "-".join(tokens[1:-1])
+                array = ak.materialized(lazy[tuple(array_key.split("%")[0].split(":"))])
+                out = array.layout
+                if isinstance(out, ak.partition.PartitionedArray):
+                    if len(out.partitions) > 1:
+                        raise ValueError("Can't deal with more than one partition")
+                    out = out.partitions[0]
+                if what == "offsets":
+                    for _ in array_key.split("%")[2:]:
+                        out = out.content
+                    return out.offsets
+                elif what == "data":
+                    while hasattr(out, "content"):
+                        out = out.content
+                    return out
+
+        return cls(form, len(lazy), Mapping())
+
 
 def physlite_events(uproot_tree, **kwargs):
     return Factory.from_tree(uproot_tree, **kwargs).events
-
-
-def from_parquet(parquet_file, **kwargs):
-    import fsspec
-
-    of = None
-    if parquet_file.startswith("http"):
-        of = fsspec.open(parquet_file, "rb")
-        parquet_file = of.open()
-    events_container = [0]
-    events = ak.from_parquet(
-        parquet_file, behavior={"__events__": events_container}, lazy=True, **kwargs
-    )
-    events_container[0] = weakref.ref(events)
-    for collection, name in behavior_dict.items():
-        if not collection in events.fields:
-            continue
-        events[collection] = ak.with_name(events[collection], name)
-    events.branch_names = get_branch_names()
-    return events
-
 
 
 if __name__ == "__main__":
