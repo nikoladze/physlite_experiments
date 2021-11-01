@@ -16,7 +16,8 @@ pip install -e ./
 Some notable scripts, modules and notebooks:
 
 * [physlite_experiments.ipynb](notebooks/physlite_experiments.ipynb): Summary of the current status of what can be done in terms reading data from ROOT files, converting to other formats and representing as awkward array
-* [physlite_events.py](physlite_experiments/physlite_events.py): Attempt to mimic [coffea NanoEvents](https://github.com/CoffeaTeam/coffea/tree/master/coffea/nanoevents). In the long run, a schema for PHYSLITE and nescessary functionality should be included into coffea.
+* [physlite_events.py](physlite_experiments/physlite_events.py): Attempt to mimic [coffea NanoEvents](https://github.com/CoffeaTeam/coffea/tree/master/coffea/nanoevents).
+* [coffea_nanoevents.ipynb](notebooks/coffea_nanoevents.ipynb): Demonstration of the PHYSLITE schema implemented within coffea. This should make coffea NanoEvents work with PHYSLITE.
 * [analysis_example.py](physlite_experiments/analysis_example.py): Example analysis, trying to reproduce object selections for Electrons, Muons and Jets to compare to a SUSYTools analysis.
 * [columnar_vs_st.ipynb](notebooks/columnar_vs_st.ipynb): Notebook for validating that analysis and running a few timing studies.
 * [to_parquet.py](physlite_experiments/scripts/to_parquet.py): Script to convert DAOD_PHYSLITE Aux branches to parquet
