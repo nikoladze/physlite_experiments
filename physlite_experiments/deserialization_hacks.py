@@ -576,4 +576,4 @@ def patch_nanoevents(verbose=False):
         return branch_to_array(columnhandle, entry_start=start, entry_stop=stop)
 
     UprootSourceMapping.extract_column = extract_column
-    PHYSLITESchema._hack_for_elementlink_int64 = False
+    UprootSourceMapping._fix_awkward_form_of_iter = False
