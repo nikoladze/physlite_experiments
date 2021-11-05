@@ -507,12 +507,23 @@ _other_custom = {
 
 def branch_to_array(branch, force_custom=False, **kwargs):
     "Try to deserialize with the custom functions and fall back to uproot"
+    array = None
+    cache_key = "{0}:{1}:{2}:{3}-{4}:{5}".format(
+        branch.cache_key,
+        branch.name,
+        branch.interpretation.cache_key,
+        kwargs.get("entry_start", None),
+        kwargs.get("entry_stop", None),
+        "ak"
+    )
+    if cache_key in branch.file.array_cache:
+        return branch.file.array_cache[cache_key]
     if branch.interpretation == AsObjects(AsVector(True, AsString(False))):
-        return _branch_to_array_vector_string(branch, **kwargs)
+        array = _branch_to_array_vector_string(branch, **kwargs)
     elif interpretation_is_vector_vector(branch.interpretation):
         values = branch.interpretation._model.values.values
         if isinstance(values, np.dtype):
-            return _branch_to_array_vector_vector(
+            array = _branch_to_array_vector_vector(
                 branch,
                 dtype=values,
                 data_size=values.itemsize,
@@ -522,15 +533,18 @@ def branch_to_array(branch, force_custom=False, **kwargs):
         else:
             try:
                 if "ElementLink_3c_DataVector" in values.__name__:
-                    return _branch_to_array_vector_vector_elementlink(branch, **kwargs)
+                    array = _branch_to_array_vector_vector_elementlink(branch, **kwargs)
             except:
                 pass
     elif str(branch.interpretation) in _other_custom:
-        return _other_custom[str(branch.interpretation)](branch, **kwargs)
-    if force_custom:
+        array = _other_custom[str(branch.interpretation)](branch, **kwargs)
+    if force_custom and array is None:
         raise TypeError(
             f"No custom deserialization for interpretation {branch.interpretation}"
         )
+    if array is not None:
+        branch.file.array_cache[cache_key] = array
+        return array
     kwargs.pop("use_forth", None)
     return branch.array(**kwargs)
 
@@ -623,7 +637,7 @@ def _extract_base_form_no_fix(cls, tree, iteritems_options={}):
     }
 
 
-def patch_nanoevents(verbose=False):
+def patch_nanoevents(verbose=False, trace=None):
     """
     Patch the `extract_column` method of `UprootSourceMapping` in
     `coffea.nanoevents` to make use of the deserialization hacks
@@ -634,6 +648,8 @@ def patch_nanoevents(verbose=False):
     def extract_column(self, columnhandle, start, stop):
         if verbose:
             print("extracting", columnhandle)
+        if trace is not None:
+            trace.append(columnhandle.name)
         return branch_to_array(columnhandle, entry_start=start, entry_stop=stop)
 
     UprootSourceMapping.extract_column = extract_column
