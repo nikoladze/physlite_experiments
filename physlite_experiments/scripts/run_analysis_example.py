@@ -54,7 +54,6 @@ def run(filename, max_chunksize=10000, http_handler=uproot.MultithreadedHTTPSour
 
 def run_parquet(filename):
     import pyarrow.parquet as pq
-    import fsspec
 
     output = {
         collection: {
@@ -64,6 +63,7 @@ def run_parquet(filename):
     }
     nevents = 0
     if filename.startswith("http"):
+        import fsspec
         with fsspec.open(filename, "rb", cache_type="none") as of:
             f = pq.ParquetFile(of)
             parquet_file = of
