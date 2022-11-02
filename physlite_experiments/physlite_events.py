@@ -8,6 +8,7 @@ from copy import deepcopy
 import json
 import uproot
 from uproot.interpretation.objects import CannotBeAwkward
+from uproot.interpretation.identify import UnknownInterpretation
 import awkward as ak
 import numpy as np
 from physlite_experiments.deserialization_hacks import branch_to_array
@@ -71,7 +72,7 @@ def get_branch_forms(uproot_tree):
         try:
             ak_form = branch.interpretation.awkward_form(None)
             forms[key] = ak_form
-        except CannotBeAwkward:
+        except (CannotBeAwkward, UnknownInterpretation):
             print("Can't interpret", key)
 
     # TODO: include the non-"Dyn"-branches - like MET association
